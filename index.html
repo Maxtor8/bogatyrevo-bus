@@ -338,6 +338,12 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      cursor: pointer;
+      transition: transform 0.1s ease, border-color 0.15s ease;
+    }
+    .trip-row:active {
+      transform: scale(0.985);
+      border-color: var(--primary);
     }
     .trip-left {
       display: flex;
@@ -414,6 +420,53 @@
     .sched-route.route-170 {
       background: rgba(139, 92, 246, 0.25);
       color: #c4b5fd;
+    }
+    .sched-chip.clickable {
+      cursor: pointer;
+    }
+    .sched-chip.clickable:active {
+      transform: scale(0.97);
+    }
+
+    /* Всплывающее большое окно выбранного автобуса */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.78);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 1000;
+    }
+    .modal-backdrop.open {
+      display: flex;
+    }
+    .modal-sheet {
+      width: 100%;
+      max-width: 480px;
+      animation: modalPop 0.16s ease-out;
+    }
+    .modal-sheet .hero-card {
+      margin-bottom: 10px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+    }
+    .modal-close-btn {
+      width: 100%;
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 700;
+      padding: 12px;
+      border-radius: 14px;
+      cursor: pointer;
+    }
+    @keyframes modalPop {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
     }
 
     /* Блок "К какому времени нужно быть на месте" */
@@ -584,7 +637,7 @@
     </button>
     <button class="dir-tab" id="tab-to_home" onclick="setDirection('to_home')">
       <span class="dir-main">🏙️ ➔ 🏠 Домой</span>
-      <span class="dir-sub">Малиновка (Космонавтов)</span>
+      <span class="dir-sub">Малиновка</span>
     </button>
   </div>
 
@@ -664,6 +717,14 @@
 
   <div class="footer-note" id="footer-updated"></div>
 
+  <!-- Большое всплывающее окно при нажатии на любой следующий автобус -->
+  <div class="modal-backdrop" id="trip-modal" onclick="onModalBackdropClick(event)">
+    <div class="modal-sheet">
+      <div id="modal-card-container"></div>
+      <button class="modal-close-btn" onclick="closeTripModal()">Закрыть</button>
+    </div>
+  </div>
+
   <script>
     // Инициализация Telegram Mini App (если открыто внутри Telegram)
     if (window.Telegram && window.Telegram.WebApp) {
@@ -700,6 +761,25 @@
 
     // Целевое время прибытия (например "16:40")
     let targetArrivalTime = '';
+
+    // Выбранный рейс для большого всплывающего окна
+    let selectedTripKey = null;
+
+    function openTripModal(route, dep) {
+      selectedTripKey = { route, dep };
+      renderAll();
+    }
+
+    function closeTripModal() {
+      selectedTripKey = null;
+      document.getElementById('trip-modal').classList.remove('open');
+    }
+
+    function onModalBackdropClick(e) {
+      if (e.target.id === 'trip-modal') {
+        closeTripModal();
+      }
+    }
 
     function onTargetSelectChange() {
       const h = document.getElementById('target-hour').value;
@@ -776,6 +856,66 @@
       return 'Ост. «Богатырёво»';
     }
 
+    function buildHeroCardHtml(trip, walkSec, walkMin) {
+      let statusClass = 'status-green';
+      let badgeText = '🟢 Спокойно собираемся';
+      let actionTimerLabel = `Выходить в ${trip.leaveClock}`;
+      let actionTimerValue = `через ${formatDuration(trip.leaveSec)}`;
+
+      if (trip.diffSec <= 0) {
+        statusClass = 'status-red';
+        badgeText = '⚫ Рейс уже уехал';
+        actionTimerLabel = 'Отправление было';
+        actionTimerValue = `в ${trip.effectiveDep}`;
+      } else if (trip.leaveSec <= 0) {
+        if (trip.diffSec >= walkSec * 0.75) {
+          statusClass = 'status-yellow';
+          badgeText = '🟡 Пора выходить!';
+          actionTimerLabel = 'Выходите сейчас';
+          actionTimerValue = `автобус через ${formatDuration(trip.diffSec)}`;
+        } else {
+          statusClass = 'status-red';
+          badgeText = '🔴 Поторопитесь!';
+          actionTimerLabel = 'Быстрым шагом';
+          actionTimerValue = `автобус через ${formatDuration(trip.diffSec)}`;
+        }
+      } else if (trip.leaveSec <= 300) {
+        statusClass = 'status-yellow';
+        badgeText = '🟡 Скоро выходить';
+        actionTimerLabel = `Выходить в ${trip.leaveClock}`;
+        actionTimerValue = `через ${formatDuration(trip.leaveSec)}`;
+      }
+
+      const routeClass = trip.route === '170с' ? 'route-170' : '';
+
+      return `
+        <div class="hero-card ${statusClass}">
+          <div class="hero-top-row">
+            <div class="hero-stop-top">📍 <strong>${getStopLabel(trip)}</strong></div>
+            <div class="status-badge">${badgeText}</div>
+          </div>
+          <div class="hero-main">
+            <div class="bus-badge-lg">
+              <span>🚌</span>
+              <span class="bus-num ${routeClass}">${trip.route}</span>
+            </div>
+            <div class="hero-dep-time">${trip.effectiveDep}</div>
+          </div>
+
+          <div class="countdown-box">
+            <div class="countdown-label">
+              <strong>${actionTimerLabel}</strong>
+            </div>
+            <div class="countdown-timer">${actionTimerValue}</div>
+          </div>
+
+          <div class="hero-meta">
+            <span>🏁 Прибытие: <strong>${getArrivalStopLabel()}</strong> в <strong>${trip.arr || '—'}</strong></span>
+          </div>
+        </div>
+      `;
+    }
+
     function renderAll() {
       const now = new Date();
       const nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
@@ -799,8 +939,8 @@
       document.getElementById('walk-val').textContent = `${walkMin} мин`;
       document.getElementById('walk-label').textContent =
         currentDirection === 'to_school'
-          ? '🚶 От дома (Полесская, 7) до ост. «Богатырёво»:'
-          : '🚶 От Малиновки (Космонавтов) до ост. «Ст. м. Малиновка»:';
+          ? '🚶 До ост. «Богатырёво»:'
+          : '🚶 До ост. «Ст. м. Малиновка»:';
 
       document.getElementById('direction-StopName').textContent = getStopLabel();
 
@@ -925,65 +1065,14 @@
         `;
         upcomingContainer.innerHTML = '';
       } else {
-        let statusClass = 'status-green';
-        let badgeText = '🟢 Спокойно собираемся';
-        let actionTimerLabel = `Выходить в ${mainTrip.leaveClock}`;
-        let actionTimerValue = `через ${formatDuration(mainTrip.leaveSec)}`;
+        heroContainer.innerHTML = buildHeroCardHtml(mainTrip, walkSec, walkMin);
 
-        if (mainTrip.leaveSec <= 0) {
-          if (mainTrip.diffSec >= walkSec * 0.75) {
-            statusClass = 'status-yellow';
-            badgeText = '🟡 Пора выходить!';
-            actionTimerLabel = 'Выходите сейчас';
-            actionTimerValue = `автобус через ${formatDuration(mainTrip.diffSec)}`;
-          } else {
-            statusClass = 'status-red';
-            badgeText = '🔴 Поторопитесь!';
-            actionTimerLabel = 'Быстрым шагом';
-            actionTimerValue = `автобус через ${formatDuration(mainTrip.diffSec)}`;
-          }
-        } else if (mainTrip.leaveSec <= 300) {
-          statusClass = 'status-yellow';
-          badgeText = '🟡 Скоро выходить';
-          actionTimerLabel = `Выходить в ${mainTrip.leaveClock}`;
-          actionTimerValue = `через ${formatDuration(mainTrip.leaveSec)}`;
-        }
-
-        const routeClass = mainTrip.route === '170с' ? 'route-170' : '';
-
-        heroContainer.innerHTML = `
-          <div class="hero-card ${statusClass}">
-            <div class="hero-top-row">
-              <div class="hero-stop-top">📍 <strong>${getStopLabel(mainTrip)}</strong></div>
-              <div class="status-badge">${badgeText}</div>
-            </div>
-            <div class="hero-main">
-              <div class="bus-badge-lg">
-                <span>🚌</span>
-                <span class="bus-num ${routeClass}">${mainTrip.route}</span>
-              </div>
-              <div class="hero-dep-time">${mainTrip.effectiveDep}</div>
-            </div>
-
-            <div class="countdown-box">
-              <div class="countdown-label">
-                <strong>${actionTimerLabel}</strong>
-              </div>
-              <div class="countdown-timer">${actionTimerValue}</div>
-            </div>
-
-            <div class="hero-meta">
-              <span>🏁 Прибытие: <strong>${getArrivalStopLabel()}</strong> в <strong>${mainTrip.arr || '—'}</strong></span>
-            </div>
-          </div>
-        `;
-
-        // Следующие рейсы после главного
+        // Следующие рейсы после главного (кликабельные)
         const nextList = catchableTrips.slice(1, 5);
         upcomingContainer.innerHTML = nextList.map((t) => {
           const rClass = t.route === '170с' ? 'route-170' : '';
           return `
-            <div class="trip-row">
+            <div class="trip-row" onclick="openTripModal('${t.route}', '${t.effectiveDep}')">
               <div class="trip-left">
                 <div class="bus-pill ${rClass}">${t.route}</div>
                 <div>
@@ -1007,13 +1096,30 @@
         const isPast = t.diffSec < -30;
         const isMain = mainTrip && t.effectiveDep === mainTrip.effectiveDep && t.route === mainTrip.route;
         const rClass = t.route === '170с' ? 'route-170' : '';
+        const clickAttr = isPast ? '' : `onclick="openTripModal('${t.route}', '${t.effectiveDep}')"`;
         return `
-          <div class="sched-chip ${isPast ? 'past' : ''} ${isMain ? 'next-up' : ''}">
+          <div class="sched-chip ${isPast ? 'past' : 'clickable'} ${isMain ? 'next-up' : ''}" ${clickAttr}>
             <strong>${t.effectiveDep}</strong>
             <span class="sched-route ${rClass}">${t.route}</span>
           </div>
         `;
       }).join('');
+
+      // Обновление модального окна, если выбран какой-то рейс
+      const modalEl = document.getElementById('trip-modal');
+      if (selectedTripKey) {
+        const pickedTrip = trips.find(
+          (t) => t.route === selectedTripKey.route && t.effectiveDep === selectedTripKey.dep
+        );
+        if (pickedTrip) {
+          document.getElementById('modal-card-container').innerHTML = buildHeroCardHtml(pickedTrip, walkSec, walkMin);
+          modalEl.classList.add('open');
+        } else {
+          modalEl.classList.remove('open');
+        }
+      } else {
+        modalEl.classList.remove('open');
+      }
 
       document.getElementById('footer-updated').textContent =
         `База расписания Минсктранс обновлена: ${data.updated_at} • Работает офлайн`;

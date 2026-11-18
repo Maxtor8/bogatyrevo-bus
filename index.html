@@ -917,7 +917,7 @@
           </div>
           ${trip.leaveSec > 60 ? `
             <button class="remind-tg-btn" onclick="remindInTelegram('${trip.route}', '${trip.effectiveDep}', ${walkMin})">
-              🔔 Напомнить выйти в Telegram
+              🔔 Напомнить в Telegram
             </button>
             ${remindHintVisible ? `<div class="remind-hint">Создайте бота в @BotFather и впишите его имя в site_config.js (или скажите мне)</div>` : ''}
           ` : ''}
@@ -1146,7 +1146,7 @@
       setHtmlIfChanged(allContainer, allHtml);
 
       document.getElementById('footer-updated').textContent =
-        `База расписания Минсктранс обновлена: ${data.updated_at} • v18`;
+        `База расписания Минсктранс обновлена: ${data.updated_at} • v19`;
     }
 
     renderAll();

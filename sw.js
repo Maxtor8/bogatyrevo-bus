@@ -1,8 +1,9 @@
-const CACHE_NAME = 'minsk-bus-150-170s-v16';
+const CACHE_NAME = 'minsk-bus-150-170s-v17';
 const ASSETS = [
   './',
   './index.html',
   './schedule_data.js',
+  './site_config.js',
   './manifest.json'
 ];
 

@@ -11,6 +11,7 @@
   <title>Автобус: Богатырёво ↔ Малиновка</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="schedule_data.js"></script>
+  <script src="site_config.js"></script>
   <style>
     :root {
       --bg: #0f172a;
@@ -292,6 +293,32 @@
     }
     .hero-meta strong {
       color: var(--text);
+    }
+    .remind-tg-btn {
+      margin-top: 10px;
+      width: 100%;
+      background: rgba(59, 130, 246, 0.16);
+      border: 1px solid rgba(59, 130, 246, 0.45);
+      color: #93c5fd;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 9px 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .remind-tg-btn:active {
+      background: rgba(59, 130, 246, 0.28);
+    }
+    .remind-hint {
+      margin-top: 8px;
+      font-size: 11.5px;
+      color: #fbbf24;
+      text-align: center;
     }
 
     /* Уведомление об автобусе, который уже совсем скоро на остановке */
@@ -810,6 +837,28 @@
       return 'Ост. «Богатырёво»';
     }
 
+    let remindHintVisible = false;
+
+    function remindInTelegram(route, dep, walkMin) {
+      const cfg = window.SITE_CONFIG || {};
+      const botUser = (cfg.telegramBotUsername || '').replace(/^@/, '').trim();
+      if (!botUser) {
+        remindHintVisible = true;
+        renderAll();
+        return;
+      }
+      const dirCode = currentDirection === 'to_school' ? 'c' : 'h';
+      const routeSlug = route.indexOf('170') !== -1 ? '170s' : '150';
+      const hhmm = dep.replace(':', '');
+      const url = `https://t.me/${botUser}?start=r_${dirCode}_${routeSlug}_${hhmm}_${walkMin}`;
+
+      if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openTelegramLink) {
+        window.Telegram.WebApp.openTelegramLink(url);
+      } else {
+        window.open(url, '_blank') || (window.location.href = url);
+      }
+    }
+
     function buildHeroCardHtml(trip, walkSec, walkMin) {
       let statusClass = 'status-green';
       let badgeText = '🟢 Спокойно собираемся';
@@ -866,6 +915,12 @@
           <div class="hero-meta">
             <span>🏁 Прибытие: <strong>${getArrivalStopLabel()}</strong> в <strong>${trip.arr || '—'}</strong></span>
           </div>
+          ${trip.leaveSec > 60 ? `
+            <button class="remind-tg-btn" onclick="remindInTelegram('${trip.route}', '${trip.effectiveDep}', ${walkMin})">
+              🔔 Напомнить выйти в Telegram
+            </button>
+            ${remindHintVisible ? `<div class="remind-hint">Создайте бота в @BotFather и впишите его имя в site_config.js (или скажите мне)</div>` : ''}
+          ` : ''}
         </div>
       `;
     }
@@ -1091,7 +1146,7 @@
       setHtmlIfChanged(allContainer, allHtml);
 
       document.getElementById('footer-updated').textContent =
-        `База расписания Минсктранс обновлена: ${data.updated_at} • v16`;
+        `База расписания Минсктранс обновлена: ${data.updated_at} • v17`;
     }
 
     renderAll();

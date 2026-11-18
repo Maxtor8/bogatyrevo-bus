@@ -596,6 +596,27 @@
       color: var(--text);
     }
 
+    .open-bot-btn {
+      margin-top: 18px;
+      width: 100%;
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13.5px;
+      font-weight: 700;
+      padding: 11px 14px;
+      border-radius: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .open-bot-btn:active {
+      border-color: var(--primary);
+    }
+
     .footer-note {
       text-align: center;
       font-size: 11px;
@@ -698,6 +719,10 @@
     <span id="total-trips-count"></span>
   </div>
   <div class="all-schedule-grid" id="all-schedule-container"></div>
+
+  <button class="open-bot-btn" onclick="openTelegramBot()">
+    ✈️ Открыть Telegram-бота
+  </button>
 
   <div class="footer-note" id="footer-updated"></div>
 
@@ -857,6 +882,19 @@
       } else {
         window.open(url, '_blank') || (window.location.href = url);
       }
+    }
+
+    function openTelegramBot() {
+      const tg = window.Telegram && window.Telegram.WebApp;
+      if (tg && tg.initData) {
+        tg.close();
+        return;
+      }
+      const cfg = window.SITE_CONFIG || {};
+      const botUser = (cfg.telegramBotUsername || '').replace(/^@/, '').trim();
+      if (!botUser) return;
+      const url = `https://t.me/${botUser}`;
+      window.open(url, '_blank') || (window.location.href = url);
     }
 
     function buildHeroCardHtml(trip, walkSec, walkMin) {
@@ -1146,7 +1184,7 @@
       setHtmlIfChanged(allContainer, allHtml);
 
       document.getElementById('footer-updated').textContent =
-        `База расписания Минсктранс обновлена: ${data.updated_at} • v19`;
+        `База расписания Минсктранс обновлена: ${data.updated_at} • v20`;
     }
 
     renderAll();

@@ -687,7 +687,7 @@
     <div class="control-tile">
       <div class="tile-label">
         <span>🎯</span>
-        <span id="planner-label">Быть в Городе к:</span>
+        <span id="planner-label">Быть к:</span>
       </div>
       <div class="planner-controls">
         <select id="target-hour" class="time-select" onchange="onTargetSelectChange()">
@@ -1025,10 +1025,7 @@
       document.getElementById('direction-StopName').textContent = getStopLabel();
 
       // Подпись калькулятора прибытия
-      document.getElementById('planner-label').textContent =
-        currentDirection === 'to_school'
-          ? 'Быть в Городе к:'
-          : 'Быть дома к:';
+      document.getElementById('planner-label').textContent = 'Быть к:';
 
       const rawTrips = data.directions[currentDirection].trips[currentDayType] || [];
       const trips = rawTrips.map((t) => {
@@ -1210,7 +1207,7 @@
       setHtmlIfChanged(allContainer, allHtml);
 
       document.getElementById('footer-updated').textContent =
-        `База расписания Минсктранс обновлена: ${data.updated_at} • v23`;
+        `База расписания Минсктранс обновлена: ${data.updated_at} • v24`;
     }
 
     renderAll();

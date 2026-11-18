@@ -429,11 +429,6 @@
     }
     .trips-accordion .hero-card {
       margin-bottom: 0;
-      animation: cardExpand 0.16s ease-out;
-    }
-    @keyframes cardExpand {
-      from { opacity: 0.7; transform: scale(0.985); }
-      to { opacity: 1; transform: scale(1); }
     }
 
     /* Блок "К какому времени нужно быть на месте" */
@@ -865,6 +860,13 @@
       `;
     }
 
+    function setHtmlIfChanged(el, html) {
+      if (el._lastHtml !== html) {
+        el._lastHtml = html;
+        el.innerHTML = html;
+      }
+    }
+
     function renderAll() {
       const now = new Date();
       const nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
@@ -1002,14 +1004,14 @@
       const mainTrip = catchableTrips[0] || futureTrips[0];
 
       if (!mainTrip) {
-        accordionContainer.innerHTML = `
+        setHtmlIfChanged(accordionContainer, `
           <div class="hero-card">
             <div class="status-badge" style="background: rgba(148,163,184,0.2); color: #cbd5e1;">На сегодня рейсы завершены</div>
             <div style="font-size: 15px; color: var(--muted);">
               Все автобусы по этому направлению на сегодня уже уехали. Посмотрите расписание на завтра!
             </div>
           </div>
-        `;
+        `);
       } else {
         // Формируем список из ближайших 5 рейсов (плюс выбранный вручную из сетки дня, если он дальше)
         const basePool = catchableTrips.length > 0 ? catchableTrips : futureTrips;
@@ -1033,7 +1035,7 @@
           }
         }
 
-        accordionContainer.innerHTML = accordionTrips.map((t) => {
+        const accHtml = accordionTrips.map((t) => {
           const isExpanded = t.route === activeTrip.route && t.effectiveDep === activeTrip.effectiveDep;
           if (isExpanded) {
             return buildHeroCardHtml(t, walkSec, walkMin);
@@ -1055,12 +1057,13 @@
             </div>
           `;
         }).join('');
+        setHtmlIfChanged(accordionContainer, accHtml);
       }
 
       // Полная сетка расписания на день
       document.getElementById('total-trips-count').textContent = `Всего рейсов: ${trips.length}`;
       const allContainer = document.getElementById('all-schedule-container');
-      allContainer.innerHTML = trips.map((t) => {
+      const allHtml = trips.map((t) => {
         const isPast = t.diffSec < -30;
         const isActive = expandedTripKey
           ? (t.effectiveDep === expandedTripKey.dep && t.route === expandedTripKey.route)
@@ -1074,6 +1077,7 @@
           </div>
         `;
       }).join('');
+      setHtmlIfChanged(allContainer, allHtml);
 
       document.getElementById('footer-updated').textContent =
         `База расписания Минсктранс обновлена: ${data.updated_at} • Работает офлайн`;

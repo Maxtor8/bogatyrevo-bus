@@ -97,22 +97,17 @@
       background: transparent;
       border: none;
       color: var(--muted);
-      padding: 12px 8px;
+      padding: 13px 8px;
       border-radius: 12px;
       cursor: pointer;
       display: flex;
-      flex-direction: column;
       align-items: center;
-      gap: 3px;
+      justify-content: center;
       transition: all 0.15s ease;
     }
     .dir-tab .dir-main {
       font-size: 15px;
       font-weight: 700;
-    }
-    .dir-tab .dir-sub {
-      font-size: 11px;
-      opacity: 0.85;
     }
     .dir-tab.active {
       background: var(--primary);
@@ -427,45 +422,17 @@
     .sched-chip.clickable:active {
       transform: scale(0.97);
     }
-
-    /* Всплывающее большое окно выбранного автобуса */
-    .modal-backdrop {
-      position: fixed;
-      inset: 0;
-      background: rgba(2, 6, 23, 0.78);
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-      z-index: 1000;
-    }
-    .modal-backdrop.open {
+    .trips-accordion {
       display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
-    .modal-sheet {
-      width: 100%;
-      max-width: 480px;
-      animation: modalPop 0.16s ease-out;
+    .trips-accordion .hero-card {
+      margin-bottom: 0;
+      animation: cardExpand 0.16s ease-out;
     }
-    .modal-sheet .hero-card {
-      margin-bottom: 10px;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
-    }
-    .modal-close-btn {
-      width: 100%;
-      background: var(--card);
-      border: 1px solid var(--card-border);
-      color: var(--text);
-      font-size: 14px;
-      font-weight: 700;
-      padding: 12px;
-      border-radius: 14px;
-      cursor: pointer;
-    }
-    @keyframes modalPop {
-      from { opacity: 0; transform: scale(0.95); }
+    @keyframes cardExpand {
+      from { opacity: 0.7; transform: scale(0.985); }
       to { opacity: 1; transform: scale(1); }
     }
 
@@ -633,11 +600,9 @@
   <div class="dir-tabs">
     <button class="dir-tab" id="tab-to_school" onclick="setDirection('to_school')">
       <span class="dir-main">🏠 ➔ 🏙️ В Город</span>
-      <span class="dir-sub">из д. Богатырёво</span>
     </button>
     <button class="dir-tab" id="tab-to_home" onclick="setDirection('to_home')">
       <span class="dir-main">🏙️ ➔ 🏠 Домой</span>
-      <span class="dir-sub">Малиновка</span>
     </button>
   </div>
 
@@ -698,15 +663,12 @@
   <!-- Баннер, если на остановке прямо сейчас есть автобус, но пешком на него уже не успеть -->
   <div id="imminent-container"></div>
 
-  <!-- Главная карточка ближайшего автобуса, на который успеваем -->
-  <div id="hero-container"></div>
-
-  <!-- Следующие рейсы -->
+  <!-- Аккордеон ближайших автобусов (нажатый разворачивается, текущий сворачивается) -->
   <div class="section-title">
-    <span>Следующие автобусы</span>
+    <span>Ближайшие автобусы</span>
     <span id="direction-StopName"></span>
   </div>
-  <div class="upcoming-list" id="upcoming-container"></div>
+  <div class="trips-accordion" id="trips-accordion"></div>
 
   <!-- Полное расписание на выбранный день -->
   <div class="section-title">
@@ -716,14 +678,6 @@
   <div class="all-schedule-grid" id="all-schedule-container"></div>
 
   <div class="footer-note" id="footer-updated"></div>
-
-  <!-- Большое всплывающее окно при нажатии на любой следующий автобус -->
-  <div class="modal-backdrop" id="trip-modal" onclick="onModalBackdropClick(event)">
-    <div class="modal-sheet">
-      <div id="modal-card-container"></div>
-      <button class="modal-close-btn" onclick="closeTripModal()">Закрыть</button>
-    </div>
-  </div>
 
   <script>
     // Инициализация Telegram Mini App (если открыто внутри Telegram)
@@ -762,22 +716,15 @@
     // Целевое время прибытия (например "16:40")
     let targetArrivalTime = '';
 
-    // Выбранный рейс для большого всплывающего окна
-    let selectedTripKey = null;
+    // Развёрнутый рейс в аккордеоне (null = первый ближайший рейс)
+    let expandedTripKey = null;
 
-    function openTripModal(route, dep) {
-      selectedTripKey = { route, dep };
+    function expandTrip(route, dep, scrollIntoView = false) {
+      expandedTripKey = { route, dep };
       renderAll();
-    }
-
-    function closeTripModal() {
-      selectedTripKey = null;
-      document.getElementById('trip-modal').classList.remove('open');
-    }
-
-    function onModalBackdropClick(e) {
-      if (e.target.id === 'trip-modal') {
-        closeTripModal();
+      if (scrollIntoView) {
+        const el = document.getElementById('trips-accordion');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
     }
 
@@ -801,11 +748,13 @@
 
     function setDirection(dir) {
       currentDirection = dir;
+      expandedTripKey = null;
       renderAll();
     }
 
     function setDayType(dayType) {
       currentDayType = dayType;
+      expandedTripKey = null;
       renderAll();
     }
 
@@ -1049,13 +998,11 @@
         imminentContainer.innerHTML = '';
       }
 
-      const heroContainer = document.getElementById('hero-container');
-      const upcomingContainer = document.getElementById('upcoming-container');
-
+      const accordionContainer = document.getElementById('trips-accordion');
       const mainTrip = catchableTrips[0] || futureTrips[0];
 
       if (!mainTrip) {
-        heroContainer.innerHTML = `
+        accordionContainer.innerHTML = `
           <div class="hero-card">
             <div class="status-badge" style="background: rgba(148,163,184,0.2); color: #cbd5e1;">На сегодня рейсы завершены</div>
             <div style="font-size: 15px; color: var(--muted);">
@@ -1063,16 +1010,37 @@
             </div>
           </div>
         `;
-        upcomingContainer.innerHTML = '';
       } else {
-        heroContainer.innerHTML = buildHeroCardHtml(mainTrip, walkSec, walkMin);
+        // Формируем список из ближайших 5 рейсов (плюс выбранный вручную из сетки дня, если он дальше)
+        const basePool = catchableTrips.length > 0 ? catchableTrips : futureTrips;
+        const accordionTrips = basePool.slice(0, 5);
 
-        // Следующие рейсы после главного (кликабельные)
-        const nextList = catchableTrips.slice(1, 5);
-        upcomingContainer.innerHTML = nextList.map((t) => {
+        let activeTrip = mainTrip;
+        if (expandedTripKey) {
+          const matchedInAll = futureTrips.find(
+            (t) => t.route === expandedTripKey.route && t.effectiveDep === expandedTripKey.dep
+          );
+          if (matchedInAll) {
+            activeTrip = matchedInAll;
+            const alreadyInList = accordionTrips.some(
+              (t) => t.route === matchedInAll.route && t.effectiveDep === matchedInAll.effectiveDep
+            );
+            if (!alreadyInList) {
+              accordionTrips.push(matchedInAll);
+            }
+          } else {
+            expandedTripKey = null;
+          }
+        }
+
+        accordionContainer.innerHTML = accordionTrips.map((t) => {
+          const isExpanded = t.route === activeTrip.route && t.effectiveDep === activeTrip.effectiveDep;
+          if (isExpanded) {
+            return buildHeroCardHtml(t, walkSec, walkMin);
+          }
           const rClass = t.route === '170с' ? 'route-170' : '';
           return `
-            <div class="trip-row" onclick="openTripModal('${t.route}', '${t.effectiveDep}')">
+            <div class="trip-row" onclick="expandTrip('${t.route}', '${t.effectiveDep}')">
               <div class="trip-left">
                 <div class="bus-pill ${rClass}">${t.route}</div>
                 <div>
@@ -1094,32 +1062,18 @@
       const allContainer = document.getElementById('all-schedule-container');
       allContainer.innerHTML = trips.map((t) => {
         const isPast = t.diffSec < -30;
-        const isMain = mainTrip && t.effectiveDep === mainTrip.effectiveDep && t.route === mainTrip.route;
+        const isActive = expandedTripKey
+          ? (t.effectiveDep === expandedTripKey.dep && t.route === expandedTripKey.route)
+          : (mainTrip && t.effectiveDep === mainTrip.effectiveDep && t.route === mainTrip.route);
         const rClass = t.route === '170с' ? 'route-170' : '';
-        const clickAttr = isPast ? '' : `onclick="openTripModal('${t.route}', '${t.effectiveDep}')"`;
+        const clickAttr = isPast ? '' : `onclick="expandTrip('${t.route}', '${t.effectiveDep}', true)"`;
         return `
-          <div class="sched-chip ${isPast ? 'past' : 'clickable'} ${isMain ? 'next-up' : ''}" ${clickAttr}>
+          <div class="sched-chip ${isPast ? 'past' : 'clickable'} ${isActive ? 'next-up' : ''}" ${clickAttr}>
             <strong>${t.effectiveDep}</strong>
             <span class="sched-route ${rClass}">${t.route}</span>
           </div>
         `;
       }).join('');
-
-      // Обновление модального окна, если выбран какой-то рейс
-      const modalEl = document.getElementById('trip-modal');
-      if (selectedTripKey) {
-        const pickedTrip = trips.find(
-          (t) => t.route === selectedTripKey.route && t.effectiveDep === selectedTripKey.dep
-        );
-        if (pickedTrip) {
-          document.getElementById('modal-card-container').innerHTML = buildHeroCardHtml(pickedTrip, walkSec, walkMin);
-          modalEl.classList.add('open');
-        } else {
-          modalEl.classList.remove('open');
-        }
-      } else {
-        modalEl.classList.remove('open');
-      }
 
       document.getElementById('footer-updated').textContent =
         `База расписания Минсктранс обновлена: ${data.updated_at} • Работает офлайн`;

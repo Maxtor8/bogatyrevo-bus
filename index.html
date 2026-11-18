@@ -683,7 +683,17 @@
 
     // Регистрация Service Worker для работы без интернета (PWA)
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js').catch(() => {});
+      const hadController = Boolean(navigator.serviceWorker.controller);
+      let swReloading = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (hadController && !swReloading) {
+          swReloading = true;
+          window.location.reload();
+        }
+      });
+      navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
+        .then((reg) => reg.update().catch(() => {}))
+        .catch(() => {});
     }
 
     const data = window.SCHEDULE_DATA;
@@ -940,13 +950,13 @@
         const picked = baseList.slice(-2).reverse(); // [самый подходящий, предыдущий с запасом]
 
         if (picked.length === 0) {
-          plannerResults.innerHTML = `
+          setHtmlIfChanged(plannerResults, `
             <div style="font-size: 12.5px; color: var(--muted);">
               К ${targetArrivalTime} утренних рейсов ещё нет (первый автобус приезжает позже).
             </div>
-          `;
+          `);
         } else {
-          plannerResults.innerHTML = picked.map((t, idx) => {
+          const planHtml = picked.map((t, idx) => {
             const isBest = idx === 0;
             const rClass = t.route === '170с' ? 'route-170' : '';
             const tag = isBest ? '✅ Вариант 1 (Вовремя)' : '🛡️ Вариант 2 (С запасом)';
@@ -973,11 +983,12 @@
               </div>
             `;
           }).join('');
+          setHtmlIfChanged(plannerResults, planHtml);
         }
         plannerResults.classList.add('visible');
       } else {
         plannerResults.classList.remove('visible');
-        plannerResults.innerHTML = '';
+        setHtmlIfChanged(plannerResults, '');
       }
 
       const futureTrips = trips.filter((t) => t.diffSec > -30);
@@ -990,14 +1001,14 @@
       const imminentContainer = document.getElementById('imminent-container');
       if (imminentTrips.length > 0) {
         const im = imminentTrips[0];
-        imminentContainer.innerHTML = `
+        setHtmlIfChanged(imminentContainer, `
           <div class="already-at-stop-banner">
             <span>⚡ <strong>Если вы уже на остановке:</strong> авт. <strong>${im.route}</strong> в <strong>${im.effectiveDep}</strong></span>
             <strong>через ${formatDuration(im.diffSec)}</strong>
           </div>
-        `;
+        `);
       } else {
-        imminentContainer.innerHTML = '';
+        setHtmlIfChanged(imminentContainer, '');
       }
 
       const accordionContainer = document.getElementById('trips-accordion');
@@ -1080,7 +1091,7 @@
       setHtmlIfChanged(allContainer, allHtml);
 
       document.getElementById('footer-updated').textContent =
-        `База расписания Минсктранс обновлена: ${data.updated_at} • Работает офлайн`;
+        `База расписания Минсктранс обновлена: ${data.updated_at} • v16`;
     }
 
     renderAll();

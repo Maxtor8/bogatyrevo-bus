@@ -1,4 +1,4 @@
-const CACHE_NAME = 'minsk-bus-150-170s-v15';
+const CACHE_NAME = 'minsk-bus-150-170s-v16';
 const ASSETS = [
   './',
   './index.html',
@@ -8,7 +8,15 @@ const ASSETS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+    caches.open(CACHE_NAME).then((cache) =>
+      Promise.all(
+        ASSETS.map((url) =>
+          fetch(new Request(url, { cache: 'no-cache' }))
+            .then((resp) => (resp && resp.status === 200 ? cache.put(url, resp) : null))
+            .catch(() => null)
+        )
+      )
+    )
   );
   self.skipWaiting();
 });
@@ -28,7 +36,7 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
 
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, { cache: 'no-cache' })
       .then((response) => {
         if (response && response.status === 200) {
           const clone = response.clone();

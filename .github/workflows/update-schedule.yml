@@ -1,0 +1,32 @@
+name: Автообновление расписания автобусов
+
+on:
+  schedule:
+    # Каждый понедельник и четверг в 04:00 по Минску (01:00 UTC)
+    - cron: '0 1 * * 1,4'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Скачать репозиторий
+        uses: actions/checkout@v4
+
+      - name: Настроить Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Обновить расписание 150 и 170с
+        run: python3 update_schedule.py
+
+      - name: Зафиксировать изменения
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add schedule_data.js schedule_data.json
+          git diff --staged --quiet || (git commit -m "chore: обновление расписания автобусов" && git push)

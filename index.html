@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Автобус 150/170с" />
+  <link rel="manifest" href="manifest.json" />
+  <title>Автобус: Богатырёво ↔ Малиновка</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="schedule_data.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --card-border: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --primary: #3b82f6;
+      --green: #10b981;
+      --green-bg: rgba(16, 185, 129, 0.14);
+      --yellow: #f59e0b;
+      --yellow-bg: rgba(245, 158, 11, 0.16);
+      --red: #ef4444;
+      --red-bg: rgba(239, 68, 68, 0.16);
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.4;
+      padding: 14px 14px 40px;
+      max-width: 520px;
+      margin: 0 auto;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .clock-pill {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-variant-numeric: tabular-nums;
+    }
+    .day-selector {
+      display: flex;
+      gap: 4px;
+      background: var(--card);
+      padding: 3px;
+      border-radius: 10px;
+      border: 1px solid var(--card-border);
+    }
+    .day-btn {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 5px 9px;
+      border-radius: 7px;
+      cursor: pointer;
+    }
+    .day-btn.active {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    /* Переключатель направления: В Город / Домой */
+    .dir-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      background: var(--card);
+      padding: 5px;
+      border-radius: 16px;
+      border: 1px solid var(--card-border);
+      margin-bottom: 12px;
+    }
+    .dir-tab {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      padding: 12px 8px;
+      border-radius: 12px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      transition: all 0.15s ease;
+    }
+    .dir-tab .dir-main {
+      font-size: 15px;
+      font-weight: 700;
+    }
+    .dir-tab .dir-sub {
+      font-size: 11px;
+      opacity: 0.85;
+    }
+    .dir-tab.active {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(59, 130, 246, 0.35);
+    }
+
+    /* Инфо-строка о времени пешком */
+    .walk-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 7px 11px;
+      margin-bottom: 12px;
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    #walk-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .walk-controls {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex-shrink: 0;
+    }
+    .walk-btn {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      border: 1px solid var(--card-border);
+      background: var(--card);
+      color: var(--text);
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .walk-val {
+      color: var(--text);
+      font-weight: 700;
+      min-width: 48px;
+      text-align: center;
+    }
+
+    /* Главная карточка ближайшего автобуса */
+    .hero-card {
+      background: var(--card);
+      border: 2px solid var(--card-border);
+      border-radius: 20px;
+      padding: 18px;
+      margin-bottom: 14px;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-card.status-green {
+      border-color: var(--green);
+      background: linear-gradient(180deg, var(--green-bg) 0%, var(--card) 65%);
+    }
+    .hero-card.status-yellow {
+      border-color: var(--yellow);
+      background: linear-gradient(180deg, var(--yellow-bg) 0%, var(--card) 65%);
+    }
+    .hero-card.status-red {
+      border-color: var(--red);
+      background: linear-gradient(180deg, var(--red-bg) 0%, var(--card) 65%);
+    }
+
+    .hero-top-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 12px;
+      white-space: nowrap;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      flex-shrink: 0;
+    }
+    .hero-stop-top {
+      font-size: 12px;
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: left;
+    }
+    .hero-stop-top strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+    .status-green .status-badge { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .status-yellow .status-badge { background: rgba(245, 158, 11, 0.25); color: #fbbf24; }
+    .status-red .status-badge { background: rgba(239, 68, 68, 0.25); color: #f87171; }
+
+    .hero-main {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 10px;
+    }
+    .bus-badge-lg {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 28px;
+      font-weight: 800;
+    }
+    .bus-num {
+      background: var(--primary);
+      color: #fff;
+      padding: 3px 12px;
+      border-radius: 10px;
+      font-size: 24px;
+    }
+    .bus-num.route-170 {
+      background: #8b5cf6;
+    }
+    .hero-dep-time {
+      font-size: 36px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+    }
+
+    .countdown-box {
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 11px 14px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      white-space: nowrap;
+    }
+    .countdown-label {
+      font-size: 14px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .countdown-label strong {
+      color: var(--text);
+      font-size: 14.5px;
+      white-space: nowrap;
+    }
+    .countdown-timer {
+      font-size: 19px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      color: #fff;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .hero-meta {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--muted);
+      text-align: center;
+      white-space: nowrap;
+    }
+    .hero-meta strong {
+      color: var(--text);
+    }
+
+    /* Уведомление об автобусе, который уже совсем скоро на остановке */
+    .already-at-stop-banner {
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px dashed rgba(245, 158, 11, 0.5);
+      border-radius: 12px;
+      padding: 9px 12px;
+      margin-bottom: 12px;
+      font-size: 12.5px;
+      color: #fcd34d;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Список следующих автобусов */
+    .section-title {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin: 16px 0 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .upcoming-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .trip-row {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 12px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .trip-left {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+    }
+    .bus-pill {
+      background: var(--primary);
+      color: #fff;
+      font-weight: 800;
+      font-size: 14px;
+      padding: 5px 9px;
+      border-radius: 8px;
+      min-width: 48px;
+      text-align: center;
+    }
+    .bus-pill.route-170 {
+      background: #8b5cf6;
+    }
+    .trip-info-main {
+      font-weight: 700;
+      font-size: 15px;
+    }
+    .trip-info-sub {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .trip-right {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .trip-dep {
+      font-size: 18px;
+      font-weight: 800;
+    }
+    .trip-in {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* Полное расписание на день */
+    .all-schedule-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .sched-chip {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 7px 9px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-variant-numeric: tabular-nums;
+      font-size: 13px;
+    }
+    .sched-chip.past {
+      opacity: 0.35;
+    }
+    .sched-chip.next-up {
+      border-color: var(--green);
+      background: var(--green-bg);
+    }
+    .sched-route {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 5px;
+      border-radius: 5px;
+      background: rgba(59, 130, 246, 0.25);
+      color: #93c5fd;
+    }
+    .sched-route.route-170 {
+      background: rgba(139, 92, 246, 0.25);
+      color: #c4b5fd;
+    }
+
+    /* Блок "К какому времени нужно быть на месте" */
+    .planner-card {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+    }
+    .planner-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .planner-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+    .planner-controls {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .time-select {
+      background: #0f172a;
+      border: 1px solid var(--primary);
+      color: #fff;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 800;
+      padding: 5px 8px;
+      border-radius: 10px;
+      outline: none;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      text-align: center;
+      min-width: 46px;
+    }
+    .time-colon {
+      font-weight: 800;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .clear-plan-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: none;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 9px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: none;
+    }
+    .clear-plan-btn.visible {
+      display: inline-block;
+    }
+    .planner-results {
+      display: none;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--card-border);
+      flex-direction: column;
+      gap: 8px;
+    }
+    .planner-results.visible {
+      display: flex;
+    }
+    .plan-option {
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+    .plan-option.best {
+      border-color: var(--green);
+      background: linear-gradient(90deg, rgba(16, 185, 129, 0.12) 0%, rgba(15, 23, 42, 0.65) 100%);
+    }
+    .plan-opt-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .plan-opt-tag {
+      font-weight: 700;
+      color: #34d399;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      flex-shrink: 0;
+    }
+    .plan-opt-stop {
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: right;
+    }
+    .plan-option.backup .plan-opt-tag {
+      color: #93c5fd;
+    }
+    .plan-opt-main {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      white-space: nowrap;
+      gap: 8px;
+    }
+    .plan-bus-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 15px;
+      font-weight: 800;
+    }
+    .plan-Timeline {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 5px;
+      display: flex;
+      justify-content: space-between;
+      white-space: nowrap;
+    }
+    .plan-Timeline strong {
+      color: var(--text);
+    }
+
+    .footer-note {
+      text-align: center;
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 16px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="clock-pill">
+      <span>🕒</span>
+      <span id="live-clock">--:--:--</span>
+    </div>
+    <div class="day-selector">
+      <button class="day-btn" data-day="workdays" onclick="setDayType('workdays')">Будни</button>
+      <button class="day-btn" data-day="saturday" onclick="setDayType('saturday')">Сб</button>
+      <button class="day-btn" data-day="sunday" onclick="setDayType('sunday')">Вс</button>
+    </div>
+  </div>
+
+  <!-- Переключатель направлений: В Город / Домой -->
+  <div class="dir-tabs">
+    <button class="dir-tab" id="tab-to_school" onclick="setDirection('to_school')">
+      <span class="dir-main">🏠 ➔ 🏙️ В Город</span>
+      <span class="dir-sub">из д. Богатырёво</span>
+    </button>
+    <button class="dir-tab" id="tab-to_home" onclick="setDirection('to_home')">
+      <span class="dir-main">🏙️ ➔ 🏠 Домой</span>
+      <span class="dir-sub">Малиновка (Космонавтов)</span>
+    </button>
+  </div>
+
+  <!-- Настройка запаса времени на дорогу до остановки -->
+  <div class="walk-bar">
+    <span id="walk-label">🚶 Пешком до остановки (с запасом):</span>
+    <div class="walk-controls">
+      <button class="walk-btn" onclick="adjustWalk(-1)">−</button>
+      <span class="walk-val" id="walk-val">10 мин</span>
+      <button class="walk-btn" onclick="adjustWalk(1)">+</button>
+    </div>
+  </div>
+
+  <!-- Калькулятор: К какому времени нужно быть на месте -->
+  <div class="planner-card">
+    <div class="planner-header">
+      <div class="planner-title">
+        <span>🎯</span>
+        <span id="planner-label">Быть на Космонавтов к:</span>
+      </div>
+      <div class="planner-controls">
+        <select id="target-hour" class="time-select" onchange="onTargetSelectChange()">
+          <option value="">ЧЧ</option>
+          <option value="06">06</option>
+          <option value="07">07</option>
+          <option value="08">08</option>
+          <option value="09">09</option>
+          <option value="10">10</option>
+          <option value="11">11</option>
+          <option value="12">12</option>
+          <option value="13">13</option>
+          <option value="14">14</option>
+          <option value="15">15</option>
+          <option value="16">16</option>
+          <option value="17">17</option>
+          <option value="18">18</option>
+          <option value="19">19</option>
+          <option value="20">20</option>
+          <option value="21">21</option>
+          <option value="22">22</option>
+          <option value="23">23</option>
+        </select>
+        <span class="time-colon">:</span>
+        <select id="target-min" class="time-select" onchange="onTargetSelectChange()">
+          <option value="00">00</option>
+          <option value="10">10</option>
+          <option value="20">20</option>
+          <option value="30">30</option>
+          <option value="40">40</option>
+          <option value="50">50</option>
+        </select>
+        <button class="clear-plan-btn" id="clear-plan-btn" onclick="clearTargetTime()">✕</button>
+      </div>
+    </div>
+    <div class="planner-results" id="planner-results"></div>
+  </div>
+
+  <!-- Баннер, если на остановке прямо сейчас есть автобус, но пешком на него уже не успеть -->
+  <div id="imminent-container"></div>
+
+  <!-- Главная карточка ближайшего автобуса, на который успеваем -->
+  <div id="hero-container"></div>
+
+  <!-- Следующие рейсы -->
+  <div class="section-title">
+    <span>Следующие автобусы</span>
+    <span id="direction-StopName"></span>
+  </div>
+  <div class="upcoming-list" id="upcoming-container"></div>
+
+  <!-- Полное расписание на выбранный день -->
+  <div class="section-title">
+    <span>Все рейсы на день (150 и 170с)</span>
+    <span id="total-trips-count"></span>
+  </div>
+  <div class="all-schedule-grid" id="all-schedule-container"></div>
+
+  <div class="footer-note" id="footer-updated"></div>
+
+  <script>
+    // Инициализация Telegram Mini App (если открыто внутри Telegram)
+    if (window.Telegram && window.Telegram.WebApp) {
+      window.Telegram.WebApp.ready();
+      window.Telegram.WebApp.expand();
+    }
+
+    // Регистрация Service Worker для работы без интернета (PWA)
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    }
+
+    const data = window.SCHEDULE_DATA;
+
+    // Автоматический выбор направления: до 12:00 — В Город, с 12:00 — Домой
+    const nowInit = new Date();
+    let currentDirection = nowInit.getHours() < 12 ? 'to_school' : 'to_home';
+
+    // Определение дня недели: 0 - Вс, 6 - Сб, 1..5 - Будни
+    function detectDayType(date) {
+      const day = date.getDay();
+      if (day === 6) return 'saturday';
+      if (day === 0) return 'sunday';
+      return 'workdays';
+    }
+
+    let currentDayType = detectDayType(nowInit);
+
+    // Запас времени пешком (сохраняется в localStorage, по умолчанию 10 мин и 15 мин)
+    let walkMinutes = {
+      to_school: parseInt(localStorage.getItem('walk_to_school') || '10', 10),
+      to_home: parseInt(localStorage.getItem('walk_to_home') || '15', 10)
+    };
+
+    // Целевое время прибытия (например "16:40")
+    let targetArrivalTime = '';
+
+    function onTargetSelectChange() {
+      const h = document.getElementById('target-hour').value;
+      const m = document.getElementById('target-min').value || '00';
+      if (!h) {
+        targetArrivalTime = '';
+      } else {
+        targetArrivalTime = `${h}:${m}`;
+      }
+      renderAll();
+    }
+
+    function clearTargetTime() {
+      targetArrivalTime = '';
+      document.getElementById('target-hour').value = '';
+      document.getElementById('target-min').value = '00';
+      renderAll();
+    }
+
+    function setDirection(dir) {
+      currentDirection = dir;
+      renderAll();
+    }
+
+    function setDayType(dayType) {
+      currentDayType = dayType;
+      renderAll();
+    }
+
+    function adjustWalk(delta) {
+      const nextVal = Math.max(1, Math.min(45, walkMinutes[currentDirection] + delta));
+      walkMinutes[currentDirection] = nextVal;
+      localStorage.setItem('walk_' + currentDirection, String(nextVal));
+      renderAll();
+    }
+
+    function timeToSeconds(hhmm) {
+      const [h, m] = hhmm.split(':').map(Number);
+      return h * 3600 + m * 60;
+    }
+
+    function secondsToHHMM(totalSec) {
+      const norm = ((totalSec % 86400) + 86400) % 86400;
+      const h = Math.floor(norm / 3600);
+      const m = Math.floor((norm % 3600) / 60);
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+
+    function formatDuration(sec) {
+      if (sec <= 0) return 'сейчас';
+      const totalMin = Math.ceil(sec / 60);
+      const h = Math.floor(totalMin / 60);
+      const m = totalMin % 60;
+      if (h > 0) {
+        return m > 0 ? `${h} ч ${m} мин` : `${h} ч`;
+      }
+      return `${totalMin} мин`;
+    }
+
+    function getStopLabel(trip) {
+      if (currentDirection === 'to_school') {
+        return 'Ост. «Богатырёво»';
+      }
+      if (trip && trip.route === '170с') {
+        return 'Ост. «Ст. м. Малиновка» (ProStore)';
+      }
+      return 'Ост. «Ст. м. Малиновка»';
+    }
+
+    function getArrivalStopLabel() {
+      if (currentDirection === 'to_school') {
+        return 'Ост. «Ст. м. Малиновка»';
+      }
+      return 'Ост. «Богатырёво»';
+    }
+
+    function renderAll() {
+      const now = new Date();
+      const nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+
+      // Часы
+      document.getElementById('live-clock').textContent =
+        now.toTimeString().slice(0, 8);
+
+      // Кнопки дня недели
+      document.querySelectorAll('.day-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.day === currentDayType);
+      });
+
+      // Кнопки направления
+      document.getElementById('tab-to_school').classList.toggle('active', currentDirection === 'to_school');
+      document.getElementById('tab-to_home').classList.toggle('active', currentDirection === 'to_home');
+
+      // Запас пешком
+      const walkMin = walkMinutes[currentDirection];
+      const walkSec = walkMin * 60;
+      document.getElementById('walk-val').textContent = `${walkMin} мин`;
+      document.getElementById('walk-label').textContent =
+        currentDirection === 'to_school'
+          ? '🚶 От дома (Полесская, 7) до ост. «Богатырёво»:'
+          : '🚶 От Малиновки (Космонавтов) до ост. «Ст. м. Малиновка»:';
+
+      document.getElementById('direction-StopName').textContent = getStopLabel();
+
+      // Подпись калькулятора прибытия
+      document.getElementById('planner-label').textContent =
+        currentDirection === 'to_school'
+          ? 'Быть на Космонавтов к:'
+          : 'Быть дома (Богатырёво) к:';
+
+      const rawTrips = data.directions[currentDirection].trips[currentDayType] || [];
+      const trips = rawTrips.map((t) => {
+        const depTime = t.dep;
+        const depSec = timeToSeconds(depTime);
+        const arrSec = t.arr ? timeToSeconds(t.arr) : depSec + 15 * 60;
+        // Пешком от остановки прибытия до двери (если приехали в Город — идти до Космонавтов walkMinutes.to_home, если домой — walkMinutes.to_school)
+        const walkAfterBusMin = currentDirection === 'to_school' ? walkMinutes.to_home : walkMinutes.to_school;
+        const doorArrSec = arrSec + walkAfterBusMin * 60;
+        return {
+          ...t,
+          effectiveDep: depTime,
+          depSec,
+          arrSec,
+          doorArrSec,
+          doorArrClock: secondsToHHMM(doorArrSec),
+          walkAfterBusMin,
+          diffSec: depSec - nowSec,
+          leaveSec: depSec - nowSec - walkSec,
+          leaveClock: secondsToHHMM(depSec - walkSec)
+        };
+      }).sort((a, b) => a.depSec - b.depSec);
+
+      // Рендер калькулятора "Быть к ЧЧ:ММ" (2 варианта)
+      const plannerResults = document.getElementById('planner-results');
+      const clearBtn = document.getElementById('clear-plan-btn');
+      clearBtn.classList.toggle('visible', Boolean(targetArrivalTime));
+
+      if (targetArrivalTime) {
+        const targetSec = timeToSeconds(targetArrivalTime);
+        // Ищем все рейсы, которые приезжают на остановку (или к двери) не позже целевого времени
+        // Сначала проверяем с учетом пешей дороги до двери, а если человек имел в виду время на остановке — показываем оба!
+        const fittingDoor = trips.filter((t) => t.doorArrSec <= targetSec);
+        const fittingStop = trips.filter((t) => t.arrSec <= targetSec);
+
+        // Берем 2 последних подходящих рейса (Вариант 1 — самый близкий по времени, Вариант 2 — на 1 рейс раньше с запасом)
+        const baseList = fittingDoor.length > 0 ? fittingDoor : fittingStop;
+        const picked = baseList.slice(-2).reverse(); // [самый подходящий, предыдущий с запасом]
+
+        if (picked.length === 0) {
+          plannerResults.innerHTML = `
+            <div style="font-size: 12.5px; color: var(--muted);">
+              К ${targetArrivalTime} утренних рейсов ещё нет (первый автобус приезжает позже).
+            </div>
+          `;
+        } else {
+          plannerResults.innerHTML = picked.map((t, idx) => {
+            const isBest = idx === 0;
+            const rClass = t.route === '170с' ? 'route-170' : '';
+            const tag = isBest ? '✅ Вариант 1 (Вовремя)' : '🛡️ Вариант 2 (С запасом)';
+            const destName = currentDirection === 'to_school' ? 'на Космонавтов' : 'дома';
+            return `
+              <div class="plan-option ${isBest ? 'best' : 'backup'}">
+                <div class="plan-opt-top">
+                  <span class="plan-opt-tag">${tag}</span>
+                  <span class="plan-opt-stop">📍 ${getStopLabel(t)}</span>
+                </div>
+                <div class="plan-opt-main">
+                  <div class="plan-bus-info">
+                    <span class="bus-pill ${rClass}">${t.route}</span>
+                    <span>Сесть в ${t.effectiveDep}</span>
+                  </div>
+                  <div style="font-size: 13.5px; font-weight: 700; color: #fff;">
+                    Выход в ${t.leaveClock}
+                  </div>
+                </div>
+                <div class="plan-Timeline">
+                  <span>🏁 На ост. в <strong>${t.arr}</strong></span>
+                  <span>🚶 Будете ${destName} в <strong>${t.doorArrClock}</strong></span>
+                </div>
+              </div>
+            `;
+          }).join('');
+        }
+        plannerResults.classList.add('visible');
+      } else {
+        plannerResults.classList.remove('visible');
+        plannerResults.innerHTML = '';
+      }
+
+      const futureTrips = trips.filter((t) => t.diffSec > -30);
+
+      // Если до автобуса меньше 45% времени ходьбы, пешком уже не успеть — показываем в баннере "Если уже у остановки"
+      const minCatchableSec = Math.floor(walkSec * 0.45);
+      const imminentTrips = futureTrips.filter((t) => t.diffSec > 0 && t.diffSec < minCatchableSec);
+      const catchableTrips = futureTrips.filter((t) => t.diffSec >= minCatchableSec);
+
+      const imminentContainer = document.getElementById('imminent-container');
+      if (imminentTrips.length > 0) {
+        const im = imminentTrips[0];
+        imminentContainer.innerHTML = `
+          <div class="already-at-stop-banner">
+            <span>⚡ <strong>Если вы уже на остановке:</strong> авт. <strong>${im.route}</strong> в <strong>${im.effectiveDep}</strong></span>
+            <strong>через ${formatDuration(im.diffSec)}</strong>
+          </div>
+        `;
+      } else {
+        imminentContainer.innerHTML = '';
+      }
+
+      const heroContainer = document.getElementById('hero-container');
+      const upcomingContainer = document.getElementById('upcoming-container');
+
+      const mainTrip = catchableTrips[0] || futureTrips[0];
+
+      if (!mainTrip) {
+        heroContainer.innerHTML = `
+          <div class="hero-card">
+            <div class="status-badge" style="background: rgba(148,163,184,0.2); color: #cbd5e1;">На сегодня рейсы завершены</div>
+            <div style="font-size: 15px; color: var(--muted);">
+              Все автобусы по этому направлению на сегодня уже уехали. Посмотрите расписание на завтра!
+            </div>
+          </div>
+        `;
+        upcomingContainer.innerHTML = '';
+      } else {
+        let statusClass = 'status-green';
+        let badgeText = '🟢 Спокойно собираемся';
+        let actionTimerLabel = `Выходить в ${mainTrip.leaveClock}`;
+        let actionTimerValue = `через ${formatDuration(mainTrip.leaveSec)}`;
+
+        if (mainTrip.leaveSec <= 0) {
+          if (mainTrip.diffSec >= walkSec * 0.75) {
+            statusClass = 'status-yellow';
+            badgeText = '🟡 Пора выходить!';
+            actionTimerLabel = 'Выходите сейчас';
+            actionTimerValue = `автобус через ${formatDuration(mainTrip.diffSec)}`;
+          } else {
+            statusClass = 'status-red';
+            badgeText = '🔴 Поторопитесь!';
+            actionTimerLabel = 'Быстрым шагом';
+            actionTimerValue = `автобус через ${formatDuration(mainTrip.diffSec)}`;
+          }
+        } else if (mainTrip.leaveSec <= 300) {
+          statusClass = 'status-yellow';
+          badgeText = '🟡 Скоро выходить';
+          actionTimerLabel = `Выходить в ${mainTrip.leaveClock}`;
+          actionTimerValue = `через ${formatDuration(mainTrip.leaveSec)}`;
+        }
+
+        const routeClass = mainTrip.route === '170с' ? 'route-170' : '';
+
+        heroContainer.innerHTML = `
+          <div class="hero-card ${statusClass}">
+            <div class="hero-top-row">
+              <div class="hero-stop-top">📍 <strong>${getStopLabel(mainTrip)}</strong></div>
+              <div class="status-badge">${badgeText}</div>
+            </div>
+            <div class="hero-main">
+              <div class="bus-badge-lg">
+                <span>🚌</span>
+                <span class="bus-num ${routeClass}">${mainTrip.route}</span>
+              </div>
+              <div class="hero-dep-time">${mainTrip.effectiveDep}</div>
+            </div>
+
+            <div class="countdown-box">
+              <div class="countdown-label">
+                <strong>${actionTimerLabel}</strong>
+              </div>
+              <div class="countdown-timer">${actionTimerValue}</div>
+            </div>
+
+            <div class="hero-meta">
+              <span>🏁 Прибытие: <strong>${getArrivalStopLabel()}</strong> в <strong>${mainTrip.arr || '—'}</strong></span>
+            </div>
+          </div>
+        `;
+
+        // Следующие рейсы после главного
+        const nextList = catchableTrips.slice(1, 5);
+        upcomingContainer.innerHTML = nextList.map((t) => {
+          const rClass = t.route === '170с' ? 'route-170' : '';
+          return `
+            <div class="trip-row">
+              <div class="trip-left">
+                <div class="bus-pill ${rClass}">${t.route}</div>
+                <div>
+                  <div class="trip-info-main">${getStopLabel(t)}</div>
+                  <div class="trip-info-sub">Выход в ${t.leaveClock}</div>
+                </div>
+              </div>
+              <div class="trip-right">
+                <div class="trip-dep">${t.effectiveDep}</div>
+                <div class="trip-in">через ${formatDuration(t.diffSec)}</div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      // Полная сетка расписания на день
+      document.getElementById('total-trips-count').textContent = `Всего рейсов: ${trips.length}`;
+      const allContainer = document.getElementById('all-schedule-container');
+      allContainer.innerHTML = trips.map((t) => {
+        const isPast = t.diffSec < -30;
+        const isMain = mainTrip && t.effectiveDep === mainTrip.effectiveDep && t.route === mainTrip.route;
+        const rClass = t.route === '170с' ? 'route-170' : '';
+        return `
+          <div class="sched-chip ${isPast ? 'past' : ''} ${isMain ? 'next-up' : ''}">
+            <strong>${t.effectiveDep}</strong>
+            <span class="sched-route ${rClass}">${t.route}</span>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('footer-updated').textContent =
+        `База расписания Минсктранс обновлена: ${data.updated_at} • Работает офлайн`;
+    }
+
+    renderAll();
+    setInterval(renderAll, 1000);
+  </script>
+</body>
+</html>

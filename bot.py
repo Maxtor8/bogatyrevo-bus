@@ -711,17 +711,30 @@ def run_bot(token: str, web_app_url: str = ""):
                 else:
                     default_dir = "to_school" if datetime.now().hour < 12 else "to_home"
                     last_direction_by_chat[chat_id] = default_dir
-                    dir_text, inline_rows = format_direction_message(default_dir)
-                    reply = (
-                        "👋 *Привет! Автобусы №150 и №170с*\n"
-                        "Маршрут: *д. Богатырёво ↔ Малиновка*\n"
-                        "_Подсказка: напишите время вроде `16:40`, чтобы узнать, на какой автобус сесть, или нажмите 🔔 под рейсом для напоминания._\n\n"
-                        + dir_text
+                    welcome_text = (
+                        "👋 *Привет! Я семейный помощник по автобусам №150 и №170с*\n"
+                        "Маршрут: *д. Богатырёво ↔ Малиновка*\n\n"
+                        "• Нажмите *«🏠 ➔ 🏙️ В Город»* или *«🏙️ ➔ 🏠 Домой»* — покажу ближайшие рейсы и время выхода.\n"
+                        "• Нажмите *🔔 под рейсом* — напомню за 5 минут до выхода и ровно в момент выхода.\n"
+                        "• Напишите нужное время (например, `16:40`) — подберу 2 лучших автобуса.\n"
+                        "• Кнопка *«📱 Открыть веб-приложение»* откроет интерактивный таймер прямо внутри Telegram."
                     )
-                    if inline_rows:
-                        inline_markup = {"inline_keyboard": inline_rows}
+                    tg_request(token, "sendMessage", {
+                        "chat_id": chat_id,
+                        "text": welcome_text,
+                        "parse_mode": "Markdown",
+                        "reply_markup": keyboard,
+                    })
 
-                # Сначала отправляем сообщение с кнопками (если есть inline_markup, клавиатура остаётся внизу)
+                    dir_text, inline_rows = format_direction_message(default_dir)
+                    tg_request(token, "sendMessage", {
+                        "chat_id": chat_id,
+                        "text": dir_text,
+                        "parse_mode": "Markdown",
+                        "reply_markup": {"inline_keyboard": inline_rows} if inline_rows else keyboard,
+                    })
+                    continue
+
                 tg_request(token, "sendMessage", {
                     "chat_id": chat_id,
                     "text": reply,

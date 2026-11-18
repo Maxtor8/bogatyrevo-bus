@@ -1,4 +1,4 @@
-const CACHE_NAME = 'minsk-bus-150-170s-v24';
+const CACHE_NAME = 'minsk-bus-150-170s-v25';
 const ASSETS = [
   './',
   './index.html',

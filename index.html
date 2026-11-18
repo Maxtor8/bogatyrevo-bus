@@ -1076,7 +1076,7 @@
             const isBest = idx === 0;
             const rClass = t.route === '170с' ? 'route-170' : '';
             const tag = isBest ? '✅ Вариант 1 (Вовремя)' : '🛡️ Вариант 2 (С запасом)';
-            const destName = currentDirection === 'to_school' ? 'в Городе' : 'дома';
+            const destName = currentDirection === 'to_school' ? 'на месте' : 'дома';
             return `
               <div class="plan-option ${isBest ? 'best' : 'backup'}">
                 <div class="plan-opt-top">
@@ -1207,7 +1207,7 @@
       setHtmlIfChanged(allContainer, allHtml);
 
       document.getElementById('footer-updated').textContent =
-        `База расписания Минсктранс обновлена: ${data.updated_at} • v24`;
+        `База расписания Минсктранс обновлена: ${data.updated_at} • v25`;
     }
 
     renderAll();

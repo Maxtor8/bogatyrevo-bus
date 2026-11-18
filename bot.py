@@ -40,7 +40,9 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SCHEDULE_FILE = os.path.join(BASE_DIR, "schedule_data.json")
 CONFIG_FILE = os.path.join(BASE_DIR, "bot_config.json")
 REMINDERS_FILE = os.path.join(BASE_DIR, "reminders.json")
+PENDING_DELETES_FILE = os.path.join(BASE_DIR, "pending_deletes.json")
 REMINDERS_LOCK = threading.Lock()
+DELETES_LOCK = threading.Lock()
 
 
 def load_config() -> dict:
@@ -337,11 +339,13 @@ def create_reminder(chat_id: int, direction_key: str, route: str, dep_hhmm: str,
 
     if now >= leave_dt:
         mins_left = max(0, int((dep_dt - now).total_seconds() // 60))
+        cleanup_ts = max(int(now.timestamp()) + 300, int(dep_dt.timestamp()) + 600)
         return (
             f"⚠️ *Выходить нужно уже прямо сейчас!*\n"
             f"🚌 Автобус *{route}* ({dir_title}) отправляется в *{dep_hhmm}* (осталось ~*{mins_left} мин*).\n"
             f"📍 {stop_name}",
             [],
+            cleanup_ts,
         )
 
     rem_id = f"{chat_id}_{direction_key}_{route_to_slug(route)}_{dep_hhmm.replace(':', '')}"
@@ -386,7 +390,8 @@ def create_reminder(chat_id: int, direction_key: str, route: str, dep_hhmm: str,
         f"🚶 Напомню выйти в *{new_item['leave_clock']}* (запас {walk_min} мин)"
     )
     inline_kb = [[{"text": "❌ Отменить это напоминание", "callback_data": f"delrem:{rem_id}"}]]
-    return msg, inline_kb
+    cleanup_ts = max(int(now.timestamp()) + 300, int(dep_dt.timestamp()) + 600)
+    return msg, inline_kb, cleanup_ts
 
 
 def format_user_reminders(chat_id: int) -> tuple:
@@ -426,8 +431,65 @@ def delete_reminder(chat_id: int, rem_id: str) -> bool:
         return changed
 
 
+def _load_json_list(path: str) -> list:
+    if not os.path.exists(path):
+        return []
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _save_json_list(path: str, items: list):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(items, f, ensure_ascii=False, indent=2)
+
+
+def schedule_message_delete(chat_id: int, message_id: int, delete_at_ts: int):
+    if not chat_id or not message_id:
+        return
+    with DELETES_LOCK:
+        items = _load_json_list(PENDING_DELETES_FILE)
+        items.append({
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "delete_at": int(delete_at_ts),
+        })
+        _save_json_list(PENDING_DELETES_FILE, items)
+
+
+def process_pending_deletes(token: str):
+    now_ts = int(time.time())
+    due = []
+    with DELETES_LOCK:
+        items = _load_json_list(PENDING_DELETES_FILE)
+        if not items:
+            return
+        remaining = []
+        for entry in items:
+            del_at = entry.get("delete_at", 0)
+            if now_ts >= del_at:
+                due.append(entry)
+            else:
+                remaining.append(entry)
+        if due:
+            _save_json_list(PENDING_DELETES_FILE, remaining)
+
+    for entry in due:
+        try:
+            tg_request(token, "deleteMessage", {
+                "chat_id": entry["chat_id"],
+                "message_id": entry["message_id"],
+            })
+        except Exception:
+            # Сообщение уже удалено вручную или старше 48 часов
+            pass
+
+
 def reminder_worker(token: str):
-    """Фоновый поток, который проверяет напоминания каждые 5 секунд."""
+    """Фоновый поток, который проверяет напоминания и чистит старые сообщения каждые 5 секунд."""
     while True:
         try:
             now_ts = int(time.time())
@@ -444,24 +506,29 @@ def reminder_worker(token: str):
                     if not item.get("warn_sent") and now_ts >= item.get("warn_ts", 0) and now_ts < item.get("leave_ts", 0):
                         item["warn_sent"] = True
                         dirty = True
+                        # Удаляем предупреждение сразу после момента выхода (+30 сек)
+                        warn_delete_at = max(now_ts + 300, item.get("leave_ts", now_ts) + 30)
                         to_send.append((
                             item["chat_id"],
                             f"⏳ *Через 5 минут пора выходить!*\n"
                             f"🚌 Автобус *{item['route']}* ({item['dir_title']}) в *{item['dep']}*\n"
                             f"📍 {item['stop_from']}\n"
                             f"🚶 Время выхода: *{item['leave_clock']}* (запас {item['walk_min']} мин)",
+                            warn_delete_at,
                         ))
 
                     if not item.get("leave_sent") and now_ts >= item.get("leave_ts", 0):
                         item["leave_sent"] = True
                         dirty = True
+                        # Удаляем сигнал выхода через 10 мин после отправления автобуса
+                        leave_delete_at = max(now_ts + 600, item.get("dep_ts", now_ts) + 600)
                         to_send.append((
                             item["chat_id"],
                             f"🚶 *ПОРА ВЫХОДИТЬ!*\n"
                             f"🚌 Автобус *{item['route']}* ({item['dir_title']}) отправляется в *{item['dep']}*\n"
                             f"📍 {item['stop_from']} (пешком {item['walk_min']} мин)",
+                            leave_delete_at,
                         ))
-                        # После отправки финального сигнала удаляем напоминание
                         continue
 
                     kept.append(item)
@@ -469,15 +536,20 @@ def reminder_worker(token: str):
                 if dirty:
                     _save_reminders_unlocked(kept)
 
-            for chat_id, msg_text in to_send:
+            for chat_id, msg_text, delete_at in to_send:
                 try:
-                    tg_request(token, "sendMessage", {
+                    sent = tg_request(token, "sendMessage", {
                         "chat_id": chat_id,
                         "text": msg_text,
                         "parse_mode": "Markdown",
                     })
+                    sent_id = sent.get("result", {}).get("message_id")
+                    if sent_id:
+                        schedule_message_delete(chat_id, sent_id, delete_at)
                 except Exception as send_err:
                     print(f"[!] Ошибка отправки напоминания в чат {chat_id}: {send_err}")
+
+            process_pending_deletes(token)
         except Exception as e:
             print(f"[!] Ошибка reminder_worker: {e}")
 
@@ -608,19 +680,22 @@ def run_bot(token: str, web_app_url: str = ""):
                     elif cb_data.startswith("rem:") and chat_id:
                         parsed_rem = parse_reminder_code(cb_data)
                         if parsed_rem:
-                            rem_text, rem_kb = create_reminder(
+                            rem_text, rem_kb, cleanup_ts = create_reminder(
                                 chat_id,
                                 parsed_rem["direction"],
                                 parsed_rem["route"],
                                 parsed_rem["dep"],
                                 parsed_rem["walk_min"],
                             )
-                            tg_request(token, "sendMessage", {
+                            sent = tg_request(token, "sendMessage", {
                                 "chat_id": chat_id,
                                 "text": rem_text,
                                 "parse_mode": "Markdown",
                                 "reply_markup": {"inline_keyboard": rem_kb} if rem_kb else keyboard,
                             })
+                            sent_id = sent.get("result", {}).get("message_id")
+                            if sent_id:
+                                schedule_message_delete(chat_id, sent_id, cleanup_ts)
                         tg_request(token, "answerCallbackQuery", {"callback_query_id": cb_id, "text": "Готово!"})
                     elif cb_data.startswith("delrem:") and chat_id:
                         rem_id = cb_data.split(":", 1)[1]
@@ -634,6 +709,8 @@ def run_bot(token: str, web_app_url: str = ""):
                                 "parse_mode": "Markdown",
                                 "reply_markup": {"inline_keyboard": rem_list_kb},
                             })
+                            if deleted and not rem_list_kb:
+                                schedule_message_delete(chat_id, msg_id, int(time.time()) + 30)
                         tg_request(token, "answerCallbackQuery", {"callback_query_id": cb_id, "text": "Отменено"})
                     else:
                         tg_request(token, "answerCallbackQuery", {"callback_query_id": cb_id})
@@ -653,7 +730,7 @@ def run_bot(token: str, web_app_url: str = ""):
                     payload_arg = text.split(" ", 1)[1].strip()
                     parsed_rem = parse_reminder_code(payload_arg)
                     if parsed_rem:
-                        reply, rem_kb = create_reminder(
+                        reply, rem_kb, cleanup_ts = create_reminder(
                             chat_id,
                             parsed_rem["direction"],
                             parsed_rem["route"],
@@ -662,12 +739,15 @@ def run_bot(token: str, web_app_url: str = ""):
                         )
                         if rem_kb:
                             inline_markup = {"inline_keyboard": rem_kb}
-                        tg_request(token, "sendMessage", {
+                        sent = tg_request(token, "sendMessage", {
                             "chat_id": chat_id,
                             "text": reply,
                             "parse_mode": "Markdown",
                             "reply_markup": inline_markup if inline_markup else keyboard,
                         })
+                        sent_id = sent.get("result", {}).get("message_id")
+                        if sent_id:
+                            schedule_message_delete(chat_id, sent_id, cleanup_ts)
                         continue
 
                 if "город" in text.lower() or text == "/city" or text == "/school":

@@ -1,5 +1,6 @@
 bot_config.json
 reminders.json
+pending_deletes.json
 .env
 __pycache__/
 *.pyc

@@ -19,7 +19,7 @@
    - **iPhone (Safari):** кнопка «Поделиться» → «На экран „Домой“».
    - **Android (Chrome):** меню `⋮` → «Установить приложение» (или «Добавить на гл. экран»).
 
-> **Автообновление на GitHub:** в папке `.github/workflows/update-schedule.yml` уже настроен скрипт, который сам 2 раза в неделю обновляет `schedule_data.js`. Чтобы он работал, включите права записи в **Settings → Actions → General → Workflow permissions → Read and write permissions**.
+> **Автообновление на GitHub:** в папке `.github/workflows/update-schedule.yml` уже настроен скрипт, который сам каждый день в 06:00 утра (по Минску) обновляет `schedule_data.js`. Чтобы он работал, включите права записи в **Settings → Actions → General → Workflow permissions → Read and write permissions**.
 
 ---
 
@@ -41,4 +41,4 @@
 ### Автозапуск 24/7 на Windows:
 1. Нажмите `Win + R`, введите `shell:startup` и нажмите Enter.
 2. Создайте там ярлык на файл `start_bot.bat` — бот будет запускаться сам после перезагрузки Windows.
-3. *(По желанию)* В **Планировщике заданий Windows** создайте задачу раз в неделю запускать `update_schedule.bat`, чтобы база расписания на сервере тоже обновлялась автоматически.
+3. *(Не обязательно, так как бот теперь сам обновляет базу в 06:00 утра)* При желании в **Планировщике заданий Windows** можно также настроить запуск `update_schedule.bat`.

@@ -295,8 +295,28 @@ def run_bot(token: str, web_app_url: str = ""):
     last_direction_by_chat = {}
     offset = 0
 
+    def get_saved_update_date() -> str:
+        try:
+            return load_schedule().get("updated_at", "")[:10]
+        except Exception:
+            return ""
+
+    last_auto_update_date = get_saved_update_date()
+    last_retry_ts = 0.0
+
     while True:
         try:
+            now_dt = datetime.now()
+            today_str = now_dt.strftime("%Y-%m-%d")
+            if now_dt.hour >= 6 and last_auto_update_date != today_str and (time.time() - last_retry_ts) >= 300:
+                try:
+                    print(f"[{now_dt.strftime('%Y-%m-%d %H:%M')}] Плановое обновление расписания в 06:00...")
+                    update_schedule.build_schedule()
+                    last_auto_update_date = today_str
+                except Exception as upd_err:
+                    last_retry_ts = time.time()
+                    print(f"[!] Ошибка автообновления расписания: {upd_err}")
+
             res = tg_request(token, "getUpdates", {"offset": offset, "timeout": 25})
             for upd in res.get("result", []):
                 offset = upd["update_id"] + 1

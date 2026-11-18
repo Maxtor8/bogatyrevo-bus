@@ -116,47 +116,61 @@
       box-shadow: 0 4px 14px rgba(59, 130, 246, 0.35);
     }
 
-    /* Инфо-строка о времени пешком */
-    .walk-bar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+    /* Две компактные карточки в одну строчку: До остановки + Быть к */
+    .controls-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
       gap: 8px;
-      background: rgba(255, 255, 255, 0.03);
+      margin-bottom: 10px;
+    }
+    .control-tile {
+      background: var(--card);
       border: 1px solid var(--card-border);
-      border-radius: 12px;
-      padding: 7px 11px;
-      margin-bottom: 12px;
+      border-radius: 14px;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      min-width: 0;
+    }
+    .tile-label {
       font-size: 11px;
+      font-weight: 600;
       color: var(--muted);
       white-space: nowrap;
-    }
-    #walk-label {
       overflow: hidden;
       text-overflow: ellipsis;
-      white-space: nowrap;
+      max-width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 4px;
     }
     .walk-controls {
       display: flex;
       align-items: center;
-      gap: 5px;
-      flex-shrink: 0;
+      justify-content: center;
+      gap: 6px;
     }
     .walk-btn {
-      width: 24px;
-      height: 24px;
-      border-radius: 6px;
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
       border: 1px solid var(--card-border);
-      background: var(--card);
+      background: #0f172a;
       color: var(--text);
+      font-size: 15px;
       font-weight: 700;
       cursor: pointer;
     }
     .walk-val {
       color: var(--text);
-      font-weight: 700;
+      font-size: 13.5px;
+      font-weight: 800;
       min-width: 48px;
       text-align: center;
+      font-variant-numeric: tabular-nums;
     }
 
     /* Главная карточка ближайшего автобуса */
@@ -485,77 +499,58 @@
     }
 
     /* Блок "К какому времени нужно быть на месте" */
-    .planner-card {
-      background: var(--card);
-      border: 1px solid var(--card-border);
-      border-radius: 14px;
-      padding: 10px 12px;
-      margin-bottom: 14px;
-    }
-    .planner-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 6px;
-    }
-    .planner-title {
-      font-size: 12.5px;
-      font-weight: 700;
-      color: var(--text);
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      white-space: nowrap;
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
     .planner-controls {
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 4px;
-      flex-shrink: 0;
     }
     .time-select {
       background: #0f172a;
       border: 1px solid var(--primary);
       color: #fff;
       font-family: inherit;
-      font-size: 14px;
+      font-size: 13.5px;
       font-weight: 800;
-      padding: 5px 7px;
-      border-radius: 10px;
+      padding: 4px 6px;
+      border-radius: 9px;
       outline: none;
       cursor: pointer;
       appearance: none;
       -webkit-appearance: none;
       text-align: center;
-      min-width: 42px;
+      min-width: 38px;
+      height: 28px;
     }
     .time-colon {
       font-weight: 800;
       color: var(--muted);
-      font-size: 14px;
+      font-size: 13.5px;
     }
     .clear-plan-btn {
       background: rgba(255, 255, 255, 0.08);
       border: none;
       color: var(--muted);
-      font-size: 12px;
-      font-weight: 600;
-      padding: 6px 9px;
+      font-size: 11px;
+      font-weight: 700;
+      width: 24px;
+      height: 28px;
       border-radius: 8px;
       cursor: pointer;
       display: none;
     }
     .clear-plan-btn.visible {
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
     }
     .planner-results {
       display: none;
-      margin-top: 12px;
-      padding-top: 12px;
-      border-top: 1px solid var(--card-border);
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
       flex-direction: column;
       gap: 8px;
     }
@@ -678,20 +673,19 @@
     </button>
   </div>
 
-  <!-- Настройка запаса времени на дорогу до остановки -->
-  <div class="walk-bar">
-    <span id="walk-label">🚶 Пешком до остановки (с запасом):</span>
-    <div class="walk-controls">
-      <button class="walk-btn" onclick="adjustWalk(-5)">−</button>
-      <span class="walk-val" id="walk-val">10 мин</span>
-      <button class="walk-btn" onclick="adjustWalk(5)">+</button>
+  <!-- Две компактные карточки в одну строчку: До остановки + Быть к -->
+  <div class="controls-grid">
+    <div class="control-tile">
+      <div class="tile-label" id="walk-label">🚶 До ост. Богатырёво</div>
+      <div class="walk-controls">
+        <button class="walk-btn" onclick="adjustWalk(-5)">−</button>
+        <span class="walk-val" id="walk-val">10 мин</span>
+        <button class="walk-btn" onclick="adjustWalk(5)">+</button>
+      </div>
     </div>
-  </div>
 
-  <!-- Калькулятор: К какому времени нужно быть на месте -->
-  <div class="planner-card">
-    <div class="planner-header">
-      <div class="planner-title">
+    <div class="control-tile">
+      <div class="tile-label">
         <span>🎯</span>
         <span id="planner-label">Быть в Городе к:</span>
       </div>
@@ -729,8 +723,10 @@
         <button class="clear-plan-btn" id="clear-plan-btn" onclick="clearTargetTime()">✕</button>
       </div>
     </div>
-    <div class="planner-results" id="planner-results"></div>
   </div>
+
+  <!-- Результаты калькулятора на всю ширину под двумя блоками -->
+  <div class="planner-results" id="planner-results"></div>
 
   <!-- Баннер, если на остановке прямо сейчас есть автобус, но пешком на него уже не успеть -->
   <div id="imminent-container"></div>
@@ -1023,8 +1019,8 @@
       document.getElementById('walk-val').textContent = `${walkMin} мин`;
       document.getElementById('walk-label').textContent =
         currentDirection === 'to_school'
-          ? '🚶 До ост. «Богатырёво»:'
-          : '🚶 До ост. «Ст. м. Малиновка»:';
+          ? '🚶 До ост. Богатырёво'
+          : '🚶 До ст. м. Малиновка';
 
       document.getElementById('direction-StopName').textContent = getStopLabel();
 
@@ -1214,7 +1210,7 @@
       setHtmlIfChanged(allContainer, allHtml);
 
       document.getElementById('footer-updated').textContent =
-        `База расписания Минсктранс обновлена: ${data.updated_at} • v22`;
+        `База расписания Минсктранс обновлена: ${data.updated_at} • v23`;
     }
 
     renderAll();

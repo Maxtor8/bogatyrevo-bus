@@ -22,8 +22,10 @@
       --primary: #3b82f6;
       --green: #10b981;
       --green-bg: rgba(16, 185, 129, 0.14);
-      --yellow: #f59e0b;
-      --yellow-bg: rgba(245, 158, 11, 0.16);
+      --yellow: #eab308;
+      --yellow-bg: rgba(234, 179, 8, 0.14);
+      --orange: #f97316;
+      --orange-bg: rgba(249, 115, 22, 0.18);
       --red: #ef4444;
       --red-bg: rgba(239, 68, 68, 0.16);
     }
@@ -191,6 +193,10 @@
       border-color: var(--yellow);
       background: linear-gradient(180deg, var(--yellow-bg) 0%, var(--card) 65%);
     }
+    .hero-card.status-orange {
+      border-color: var(--orange);
+      background: linear-gradient(180deg, var(--orange-bg) 0%, var(--card) 65%);
+    }
     .hero-card.status-red {
       border-color: var(--red);
       background: linear-gradient(180deg, var(--red-bg) 0%, var(--card) 65%);
@@ -230,7 +236,8 @@
       font-weight: 600;
     }
     .status-green .status-badge { background: rgba(16, 185, 129, 0.2); color: #34d399; }
-    .status-yellow .status-badge { background: rgba(245, 158, 11, 0.25); color: #fbbf24; }
+    .status-yellow .status-badge { background: rgba(234, 179, 8, 0.22); color: #fde047; }
+    .status-orange .status-badge { background: rgba(249, 115, 22, 0.26); color: #fdba74; }
     .status-red .status-badge { background: rgba(239, 68, 68, 0.25); color: #f87171; }
 
     .hero-main {
@@ -283,11 +290,11 @@
     }
     .countdown-label strong {
       color: var(--text);
-      font-size: clamp(12.5px, 3.6vw, 14.5px);
+      font-size: clamp(12px, 3.4vw, 14px);
       white-space: nowrap;
     }
     .countdown-timer {
-      font-size: clamp(15px, 4.3vw, 18.5px);
+      font-size: clamp(13.5px, 3.8vw, 17px);
       font-weight: 800;
       font-variant-numeric: tabular-nums;
       color: #fff;
@@ -936,15 +943,15 @@
         actionTimerValue = `в ${trip.effectiveDep}`;
       } else if (trip.leaveSec <= 0) {
         if (trip.diffSec >= walkSec * 0.75) {
-          statusClass = 'status-yellow';
-          badgeText = '🟡 Выходите!';
+          statusClass = 'status-orange';
+          badgeText = '🟠 Выходите!';
           actionTimerLabel = 'Выходите сейчас';
-          actionTimerValue = `через ${formatDuration(trip.diffSec)}`;
+          actionTimerValue = `автобус через ${formatDuration(trip.diffSec)}`;
         } else {
           statusClass = 'status-red';
           badgeText = '🔴 Поторопитесь!';
           actionTimerLabel = 'Быстрым шагом';
-          actionTimerValue = `через ${formatDuration(trip.diffSec)}`;
+          actionTimerValue = `автобус через ${formatDuration(trip.diffSec)}`;
         }
       } else if (trip.leaveSec <= 300) {
         statusClass = 'status-yellow';
@@ -1207,7 +1214,7 @@
       setHtmlIfChanged(allContainer, allHtml);
 
       document.getElementById('footer-updated').textContent =
-        `База расписания Минсктранс обновлена: ${data.updated_at} • v25`;
+        `База расписания Минсктранс обновлена: ${data.updated_at} • v26`;
     }
 
     renderAll();

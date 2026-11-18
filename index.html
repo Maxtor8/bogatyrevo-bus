@@ -682,9 +682,9 @@
   <div class="walk-bar">
     <span id="walk-label">🚶 Пешком до остановки (с запасом):</span>
     <div class="walk-controls">
-      <button class="walk-btn" onclick="adjustWalk(-1)">−</button>
+      <button class="walk-btn" onclick="adjustWalk(-5)">−</button>
       <span class="walk-val" id="walk-val">10 мин</span>
-      <button class="walk-btn" onclick="adjustWalk(1)">+</button>
+      <button class="walk-btn" onclick="adjustWalk(5)">+</button>
     </div>
   </div>
 
@@ -693,7 +693,7 @@
     <div class="planner-header">
       <div class="planner-title">
         <span>🎯</span>
-        <span id="planner-label">Быть на Космонавтов к:</span>
+        <span id="planner-label">Быть в Городе к:</span>
       </div>
       <div class="planner-controls">
         <select id="target-hour" class="time-select" onchange="onTargetSelectChange()">
@@ -845,7 +845,8 @@
     }
 
     function adjustWalk(delta) {
-      const nextVal = Math.max(1, Math.min(45, walkMinutes[currentDirection] + delta));
+      const snapped = Math.round((walkMinutes[currentDirection] + delta) / 5) * 5;
+      const nextVal = Math.max(5, Math.min(45, snapped));
       walkMinutes[currentDirection] = nextVal;
       localStorage.setItem('walk_' + currentDirection, String(nextVal));
       renderAll();
@@ -1030,7 +1031,7 @@
       // Подпись калькулятора прибытия
       document.getElementById('planner-label').textContent =
         currentDirection === 'to_school'
-          ? 'Быть на Космонавтов к:'
+          ? 'Быть в Городе к:'
           : 'Быть дома к:';
 
       const rawTrips = data.directions[currentDirection].trips[currentDayType] || [];
@@ -1082,7 +1083,7 @@
             const isBest = idx === 0;
             const rClass = t.route === '170с' ? 'route-170' : '';
             const tag = isBest ? '✅ Вариант 1 (Вовремя)' : '🛡️ Вариант 2 (С запасом)';
-            const destName = currentDirection === 'to_school' ? 'на Космонавтов' : 'дома';
+            const destName = currentDirection === 'to_school' ? 'в Городе' : 'дома';
             return `
               <div class="plan-option ${isBest ? 'best' : 'backup'}">
                 <div class="plan-opt-top">
@@ -1213,7 +1214,7 @@
       setHtmlIfChanged(allContainer, allHtml);
 
       document.getElementById('footer-updated').textContent =
-        `База расписания Минсктранс обновлена: ${data.updated_at} • v21`;
+        `База расписания Минсктранс обновлена: ${data.updated_at} • v22`;
     }
 
     renderAll();

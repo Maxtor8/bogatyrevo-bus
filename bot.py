@@ -237,7 +237,7 @@ def format_target_arrival_message(target_hhmm: str, direction_key: str, now: dat
     base_list = fitting_door if fitting_door else fitting_stop
     picked = list(reversed(base_list[-2:]))
 
-    dest_label = "на Космонавтов" if direction_key == "to_school" else "дома (Богатырёво)"
+    dest_label = "в Городе" if direction_key == "to_school" else "дома"
     header_icon = "🏠 ➔ 🏙️" if direction_key == "to_school" else "🏙️ ➔ 🏠"
 
     lines = [

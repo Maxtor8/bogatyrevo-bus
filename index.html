@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#0f172a" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -38,7 +38,7 @@
       background-color: var(--bg);
       color: var(--text);
       line-height: 1.4;
-      padding: 14px 14px 40px;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 12px calc(env(safe-area-inset-bottom, 0px) + 32px);
       max-width: 520px;
       margin: 0 auto;
     }
@@ -163,8 +163,8 @@
     .hero-card {
       background: var(--card);
       border: 2px solid var(--card-border);
-      border-radius: 20px;
-      padding: 18px;
+      border-radius: 18px;
+      padding: 14px;
       margin-bottom: 14px;
       position: relative;
       overflow: hidden;
@@ -187,28 +187,29 @@
       justify-content: space-between;
       align-items: center;
       gap: 6px;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
       white-space: nowrap;
     }
     .status-badge {
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      padding: 4px 9px;
+      padding: 3px 8px;
       border-radius: 999px;
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.02em;
       flex-shrink: 0;
     }
     .hero-stop-top {
-      font-size: 12px;
+      font-size: 11.5px;
       color: var(--muted);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       text-align: left;
+      min-width: 0;
     }
     .hero-stop-top strong {
       color: var(--text);
@@ -251,29 +252,28 @@
     .countdown-box {
       background: rgba(15, 23, 42, 0.65);
       border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 14px;
-      padding: 11px 14px;
+      border-radius: 13px;
+      padding: 10px 12px;
       margin-bottom: 10px;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
       white-space: nowrap;
     }
     .countdown-label {
-      font-size: 14px;
+      font-size: 13px;
       color: var(--muted);
       white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      flex-shrink: 0;
     }
     .countdown-label strong {
       color: var(--text);
-      font-size: 14.5px;
+      font-size: clamp(12.5px, 3.6vw, 14.5px);
       white-space: nowrap;
     }
     .countdown-timer {
-      font-size: 19px;
+      font-size: clamp(15px, 4.3vw, 18.5px);
       font-weight: 800;
       font-variant-numeric: tabular-nums;
       color: #fff;
@@ -286,7 +286,7 @@
       justify-content: center;
       align-items: center;
       gap: 6px;
-      font-size: 13px;
+      font-size: 12.5px;
       color: var(--muted);
       text-align: center;
       white-space: nowrap;
@@ -337,15 +337,22 @@
 
     /* Список следующих автобусов */
     .section-title {
-      font-size: 13px;
+      font-size: 11px;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.03em;
       color: var(--muted);
-      margin: 16px 0 8px;
+      margin: 14px 0 8px;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+    .section-title span:last-child {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-align: right;
     }
     .upcoming-list {
       display: flex;
@@ -356,10 +363,11 @@
       background: var(--card);
       border: 1px solid var(--card-border);
       border-radius: 14px;
-      padding: 12px 14px;
+      padding: 10px 12px;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 8px;
       cursor: pointer;
       transition: transform 0.1s ease, border-color 0.15s ease;
     }
@@ -370,48 +378,66 @@
     .trip-left {
       display: flex;
       align-items: center;
-      gap: 11px;
+      gap: 9px;
+      min-width: 0;
+      flex: 1;
     }
     .bus-pill {
       background: var(--primary);
       color: #fff;
       font-weight: 800;
-      font-size: 14px;
-      padding: 5px 9px;
+      font-size: 13px;
+      padding: 4px 8px;
       border-radius: 8px;
-      min-width: 48px;
+      min-width: 44px;
       text-align: center;
+      flex-shrink: 0;
     }
     .bus-pill.route-170 {
       background: #8b5cf6;
     }
+    .trip-info-wrap {
+      min-width: 0;
+      flex: 1;
+    }
     .trip-info-main {
       font-weight: 700;
-      font-size: 15px;
+      font-size: 13.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .trip-info-sub {
-      font-size: 12px;
+      font-size: 11.5px;
       color: var(--muted);
+      white-space: nowrap;
     }
     .trip-right {
       text-align: right;
       font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+      white-space: nowrap;
     }
     .trip-dep {
-      font-size: 18px;
+      font-size: 17px;
       font-weight: 800;
     }
     .trip-in {
-      font-size: 12px;
+      font-size: 11.5px;
       color: var(--muted);
     }
 
     /* Полное расписание на день */
     .all-schedule-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+      grid-template-columns: repeat(3, 1fr);
       gap: 6px;
       margin-top: 8px;
+    }
+    @media (min-width: 460px) {
+      .all-schedule-grid {
+        grid-template-columns: repeat(4, 1fr);
+      }
     }
     .sched-chip {
       background: var(--card);
@@ -462,24 +488,27 @@
     .planner-card {
       background: var(--card);
       border: 1px solid var(--card-border);
-      border-radius: 16px;
-      padding: 12px 14px;
+      border-radius: 14px;
+      padding: 10px 12px;
       margin-bottom: 14px;
     }
     .planner-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
     }
     .planner-title {
-      font-size: 13px;
+      font-size: 12.5px;
       font-weight: 700;
       color: var(--text);
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
       white-space: nowrap;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .planner-controls {
       display: flex;
@@ -494,14 +523,14 @@
       font-family: inherit;
       font-size: 14px;
       font-weight: 800;
-      padding: 5px 8px;
+      padding: 5px 7px;
       border-radius: 10px;
       outline: none;
       cursor: pointer;
       appearance: none;
       -webkit-appearance: none;
       text-align: center;
-      min-width: 46px;
+      min-width: 42px;
     }
     .time-colon {
       font-weight: 800;
@@ -708,14 +737,14 @@
 
   <!-- Аккордеон ближайших автобусов (нажатый разворачивается, текущий сворачивается) -->
   <div class="section-title">
-    <span>Ближайшие автобусы</span>
+    <span>Ближайшие рейсы</span>
     <span id="direction-StopName"></span>
   </div>
   <div class="trips-accordion" id="trips-accordion"></div>
 
   <!-- Полное расписание на выбранный день -->
   <div class="section-title">
-    <span>Все рейсы на день (150 и 170с)</span>
+    <span>Все рейсы (150 и 170с)</span>
     <span id="total-trips-count"></span>
   </div>
   <div class="all-schedule-grid" id="all-schedule-container"></div>
@@ -847,19 +876,19 @@
 
     function getStopLabel(trip) {
       if (currentDirection === 'to_school') {
-        return 'Ост. «Богатырёво»';
+        return 'Богатырёво';
       }
       if (trip && trip.route === '170с') {
-        return 'Ост. «Ст. м. Малиновка» (ProStore)';
+        return 'Ст. м. Малиновка (ProStore)';
       }
-      return 'Ост. «Ст. м. Малиновка»';
+      return 'Ст. м. Малиновка';
     }
 
     function getArrivalStopLabel() {
       if (currentDirection === 'to_school') {
-        return 'Ост. «Ст. м. Малиновка»';
+        return 'Ст. м. Малиновка';
       }
-      return 'Ост. «Богатырёво»';
+      return 'Богатырёво';
     }
 
     let remindHintVisible = false;
@@ -899,30 +928,30 @@
 
     function buildHeroCardHtml(trip, walkSec, walkMin) {
       let statusClass = 'status-green';
-      let badgeText = '🟢 Спокойно собираемся';
+      let badgeText = '🟢 Собираемся';
       let actionTimerLabel = `Выходить в ${trip.leaveClock}`;
       let actionTimerValue = `через ${formatDuration(trip.leaveSec)}`;
 
       if (trip.diffSec <= 0) {
         statusClass = 'status-red';
-        badgeText = '⚫ Рейс уже уехал';
+        badgeText = '⚫ Уже уехал';
         actionTimerLabel = 'Отправление было';
         actionTimerValue = `в ${trip.effectiveDep}`;
       } else if (trip.leaveSec <= 0) {
         if (trip.diffSec >= walkSec * 0.75) {
           statusClass = 'status-yellow';
-          badgeText = '🟡 Пора выходить!';
+          badgeText = '🟡 Выходите!';
           actionTimerLabel = 'Выходите сейчас';
-          actionTimerValue = `автобус через ${formatDuration(trip.diffSec)}`;
+          actionTimerValue = `через ${formatDuration(trip.diffSec)}`;
         } else {
           statusClass = 'status-red';
           badgeText = '🔴 Поторопитесь!';
           actionTimerLabel = 'Быстрым шагом';
-          actionTimerValue = `автобус через ${formatDuration(trip.diffSec)}`;
+          actionTimerValue = `через ${formatDuration(trip.diffSec)}`;
         }
       } else if (trip.leaveSec <= 300) {
         statusClass = 'status-yellow';
-        badgeText = '🟡 Скоро выходить';
+        badgeText = '🟡 Скоро выход';
         actionTimerLabel = `Выходить в ${trip.leaveClock}`;
         actionTimerValue = `через ${formatDuration(trip.leaveSec)}`;
       }
@@ -1002,7 +1031,7 @@
       document.getElementById('planner-label').textContent =
         currentDirection === 'to_school'
           ? 'Быть на Космонавтов к:'
-          : 'Быть дома (Богатырёво) к:';
+          : 'Быть дома к:';
 
       const rawTrips = data.directions[currentDirection].trips[currentDayType] || [];
       const trips = rawTrips.map((t) => {
@@ -1149,7 +1178,7 @@
             <div class="trip-row" onclick="expandTrip('${t.route}', '${t.effectiveDep}')">
               <div class="trip-left">
                 <div class="bus-pill ${rClass}">${t.route}</div>
-                <div>
+                <div class="trip-info-wrap">
                   <div class="trip-info-main">${getStopLabel(t)}</div>
                   <div class="trip-info-sub">Выход в ${t.leaveClock}</div>
                 </div>
@@ -1165,7 +1194,7 @@
       }
 
       // Полная сетка расписания на день
-      document.getElementById('total-trips-count').textContent = `Всего рейсов: ${trips.length}`;
+      document.getElementById('total-trips-count').textContent = `Всего: ${trips.length}`;
       const allContainer = document.getElementById('all-schedule-container');
       const allHtml = trips.map((t) => {
         const isPast = t.diffSec < -30;
@@ -1184,7 +1213,7 @@
       setHtmlIfChanged(allContainer, allHtml);
 
       document.getElementById('footer-updated').textContent =
-        `База расписания Минсктранс обновлена: ${data.updated_at} • v20`;
+        `База расписания Минсктранс обновлена: ${data.updated_at} • v21`;
     }
 
     renderAll();

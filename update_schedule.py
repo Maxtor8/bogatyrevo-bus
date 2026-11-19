@@ -11,7 +11,7 @@ import re
 import ssl
 import sys
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
@@ -71,8 +71,9 @@ def build_schedule():
         raw[key] = fetch_times(url)
         print(f"  [OK] {key}: будни={len(raw[key]['workdays'])}, сб={len(raw[key]['saturday'])}, вс={len(raw[key]['sunday'])}")
 
+    minsk_tz = timezone(timedelta(hours=3))
     schedule = {
-        "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "updated_at": datetime.now(minsk_tz).strftime("%Y-%m-%d %H:%M"),
         "config": {
             "home_address": "д. Богатырёво, ул. Полесская, 7",
             "city_address": "Малиновка (Космонавтов)",

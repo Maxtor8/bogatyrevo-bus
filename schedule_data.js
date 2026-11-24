@@ -1,5 +1,5 @@
 window.SCHEDULE_DATA = {
-  "updated_at": "2026-11-23 15:18",
+  "updated_at": "2026-11-24 16:33",
   "config": {
     "home_address": "д. Богатырёво, ул. Полесская, 7",
     "city_address": "Малиновка (Космонавтов)",

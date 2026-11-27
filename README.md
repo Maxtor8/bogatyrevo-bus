@@ -19,7 +19,7 @@
    - **iPhone (Safari):** кнопка «Поделиться» → «На экран „Домой“».
    - **Android (Chrome):** меню `⋮` → «Установить приложение» (или «Добавить на гл. экран»).
 
-> **Автообновление на GitHub:** в папке `.github/workflows/update-schedule.yml` уже настроен скрипт, который сам каждый день в 06:00 утра (по Минску) обновляет `schedule_data.js`. Чтобы он работал, включите права записи в **Settings → Actions → General → Workflow permissions → Read and write permissions**.
+> **Автообновление на GitHub:** в папке `.github/workflows/update-schedule.yml` уже настроен скрипт, который сам каждую ночь и утро (по Минску) проверяет и обновляет `schedule_data.js` без лишних холостых коммитов. Чтобы он работал, включите права записи в **Settings → Actions → General → Workflow permissions → Read and write permissions**.
 
 ---
 

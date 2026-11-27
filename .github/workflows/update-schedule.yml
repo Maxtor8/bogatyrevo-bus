@@ -2,8 +2,10 @@ name: Автообновление расписания автобусов
 
 on:
   schedule:
-    # Каждый день в 06:13 по Минску (03:13 UTC — не в пиковые :00 минут)
-    - cron: '13 3 * * *'
+    # Ночной слот: 00:17 по Минску (21:17 UTC) — успевает обновиться к утру даже при очередях GitHub
+    - cron: '17 21 * * *'
+    # Контрольный утренний слот: 06:23 по Минску (03:23 UTC) — проверит изменения без лишнего коммита
+    - cron: '23 3 * * *'
   workflow_dispatch:
 
 permissions:
@@ -22,11 +24,20 @@ jobs:
           python-version: '3.12'
 
       - name: Обновить расписание 150 и 170с
-        run: python3 update_schedule.py
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            python3 update_schedule.py --smart
+          else
+            python3 update_schedule.py
+          fi
 
       - name: Зафиксировать изменения
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add schedule_data.js schedule_data.json
-          git diff --staged --quiet || (git commit -m "chore: обновление расписания автобусов" && git push)
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: обновление расписания автобусов"
+            git pull --rebase origin main
+            git push
+          fi

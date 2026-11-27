@@ -721,11 +721,17 @@
         <span class="time-colon">:</span>
         <select id="target-min" class="time-select" onchange="onTargetSelectChange()">
           <option value="00">00</option>
+          <option value="05">05</option>
           <option value="10">10</option>
+          <option value="15">15</option>
           <option value="20">20</option>
+          <option value="25">25</option>
           <option value="30">30</option>
+          <option value="35">35</option>
           <option value="40">40</option>
+          <option value="45">45</option>
           <option value="50">50</option>
+          <option value="55">55</option>
         </select>
         <button class="clear-plan-btn" id="clear-plan-btn" onclick="clearTargetTime()">✕</button>
       </div>
@@ -780,21 +786,80 @@
         .catch(() => {});
     }
 
-    const data = window.SCHEDULE_DATA;
+    let data = window.SCHEDULE_DATA;
 
-    // Автоматический выбор направления: до 12:00 — В Город, с 12:00 — Домой
-    const nowInit = new Date();
-    let currentDirection = nowInit.getHours() < 12 ? 'to_school' : 'to_home';
+    // Точное минское время (UTC+3 круглый год, без сезонного перевода часов)
+    function getMinskTime() {
+      const d = new Date(Date.now() + 3 * 3600 * 1000);
+      const y = d.getUTCFullYear();
+      const mo = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const da = String(d.getUTCDate()).padStart(2, '0');
+      const h = d.getUTCHours();
+      const m = d.getUTCMinutes();
+      const s = d.getUTCSeconds();
+      const wd = d.getUTCDay(); // 0 - Вс, 6 - Сб, 1..5 - Будни
+      return {
+        dateKey: `${y}-${mo}-${da}`,
+        weekday: wd,
+        hours: h,
+        minutes: m,
+        seconds: s,
+        nowSec: h * 3600 + m * 60 + s,
+        clockStr: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+      };
+    }
 
     // Определение дня недели: 0 - Вс, 6 - Сб, 1..5 - Будни
-    function detectDayType(date) {
-      const day = date.getDay();
-      if (day === 6) return 'saturday';
-      if (day === 0) return 'sunday';
+    function detectDayType(weekday) {
+      if (weekday === 6) return 'saturday';
+      if (weekday === 0) return 'sunday';
       return 'workdays';
     }
 
-    let currentDayType = detectDayType(nowInit);
+    // Автоматический выбор направления: до 12:00 — В Город, с 12:00 — Домой
+    const initMinsk = getMinskTime();
+    let lastAutoDateKey = initMinsk.dateKey;
+    let currentDirection = initMinsk.hours < 12 ? 'to_school' : 'to_home';
+    let currentDayType = detectDayType(initMinsk.weekday);
+
+    // Фоновая подгрузка свежего schedule_data.js для постоянно открытого PWA
+    let lastScheduleFetchTs = Date.now();
+    let scheduleFetchInFlight = false;
+
+    async function refreshScheduleInBackground(force = false) {
+      if (scheduleFetchInFlight) return;
+      if (!force && Date.now() - lastScheduleFetchTs < 10 * 60 * 1000) return;
+      scheduleFetchInFlight = true;
+      try {
+        const resp = await fetch('./schedule_data.js?t=' + Date.now(), { cache: 'no-store' });
+        if (resp.ok) {
+          const text = await resp.text();
+          const eqIdx = text.indexOf('=');
+          if (eqIdx !== -1) {
+            const jsonStr = text.slice(eqIdx + 1).trim().replace(/;\s*$/, '');
+            const parsed = JSON.parse(jsonStr);
+            if (parsed && parsed.directions) {
+              window.SCHEDULE_DATA = parsed;
+              data = parsed;
+              lastScheduleFetchTs = Date.now();
+              renderAll();
+            }
+          }
+        }
+      } catch (_) {
+        // Офлайн — продолжаем работать на локальной базе
+      } finally {
+        scheduleFetchInFlight = false;
+      }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        refreshScheduleInBackground(false);
+        renderAll();
+      }
+    });
+    setInterval(() => refreshScheduleInBackground(false), 30 * 60 * 1000);
 
     // Запас времени пешком (сохраняется в localStorage, по умолчанию 10 мин и 15 мин)
     let walkMinutes = {
@@ -1004,12 +1069,17 @@
     }
 
     function renderAll() {
-      const now = new Date();
-      const nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+      const mt = getMinskTime();
+      if (mt.dateKey !== lastAutoDateKey) {
+        lastAutoDateKey = mt.dateKey;
+        currentDayType = detectDayType(mt.weekday);
+        currentDirection = mt.hours < 12 ? 'to_school' : 'to_home';
+        expandedTripKey = null;
+      }
+      const nowSec = mt.nowSec;
 
       // Часы
-      document.getElementById('live-clock').textContent =
-        now.toTimeString().slice(0, 8);
+      document.getElementById('live-clock').textContent = mt.clockStr;
 
       // Кнопки дня недели
       document.querySelectorAll('.day-btn').forEach((btn) => {
@@ -1214,7 +1284,7 @@
       setHtmlIfChanged(allContainer, allHtml);
 
       document.getElementById('footer-updated').textContent =
-        `База расписания Минсктранс обновлена: ${data.updated_at} • v26`;
+        `База расписания Минсктранс обновлена: ${data.updated_at} • v27`;
     }
 
     renderAll();

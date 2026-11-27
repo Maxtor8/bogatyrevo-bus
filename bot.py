@@ -10,8 +10,8 @@ Telegram-бот для отслеживания автобусов №150 и №
   - Ближайшие автобусы (В Город / Домой) с кнопками постановки напоминаний
   - Напоминания из веб-приложения по deep-link (/start r_c_150_1639_10)
   - Двойное уведомление: за 5 минут до выхода и ровно в момент выхода
-  - Калькулятор «Быть на месте к ЧЧ:ММ»
-  - Ежедневное автообновление расписания в 06:00
+  - Калькулятор «Быть на месте к ЧЧ:ММ» с кнопками напоминаний
+  - Ежедневное автообновление расписания в 06:00 по Минску
 
 Настройка:
   1) Создайте файл bot_config.json рядом с bot.py (по образцу bot_config.example.json)
@@ -25,8 +25,9 @@ import ssl
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import update_schedule
 
@@ -41,8 +42,49 @@ SCHEDULE_FILE = os.path.join(BASE_DIR, "schedule_data.json")
 CONFIG_FILE = os.path.join(BASE_DIR, "bot_config.json")
 REMINDERS_FILE = os.path.join(BASE_DIR, "reminders.json")
 PENDING_DELETES_FILE = os.path.join(BASE_DIR, "pending_deletes.json")
+
+MINSK_TZ = timezone(timedelta(hours=3))
+
 REMINDERS_LOCK = threading.Lock()
 DELETES_LOCK = threading.Lock()
+SCHEDULE_LOCK = threading.Lock()
+
+_SCHEDULE_CACHE = {"mtime": None, "data": None}
+_SSL_UNVERIFIED_FALLBACK = False
+
+
+def now_minsk() -> datetime:
+    """Текущее время строго в часовом поясе Минска (UTC+3), независимо от ОС/сервера."""
+    return datetime.now(MINSK_TZ)
+
+
+def ensure_minsk_tz(dt: datetime = None) -> datetime:
+    """Нормализует переданный datetime к часовому поясу Минска (UTC+3)."""
+    if dt is None:
+        return now_minsk()
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=MINSK_TZ)
+    return dt.astimezone(MINSK_TZ)
+
+
+def _atomic_write_json(path: str, data):
+    """Атомарная запись JSON через временный файл и os.replace (защита от обрыва питания)."""
+    tmp_path = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            try:
+                os.fsync(f.fileno())
+            except OSError:
+                pass
+        os.replace(tmp_path, path)
+    finally:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
 
 
 def load_config() -> dict:
@@ -64,10 +106,17 @@ def load_config() -> dict:
 
 
 def load_schedule() -> dict:
-    if not os.path.exists(SCHEDULE_FILE):
-        update_schedule.build_schedule()
-    with open(SCHEDULE_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    with SCHEDULE_LOCK:
+        if not os.path.exists(SCHEDULE_FILE):
+            update_schedule.build_schedule()
+        mtime = os.path.getmtime(SCHEDULE_FILE)
+        if _SCHEDULE_CACHE["data"] is not None and _SCHEDULE_CACHE["mtime"] == mtime:
+            return _SCHEDULE_CACHE["data"]
+        with open(SCHEDULE_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        _SCHEDULE_CACHE["mtime"] = mtime
+        _SCHEDULE_CACHE["data"] = data
+        return data
 
 
 def get_day_type(dt: datetime) -> str:
@@ -114,8 +163,7 @@ def get_stop_name(direction_key: str, route: str) -> str:
 
 
 def get_upcoming_trips(direction_key: str, now: datetime = None) -> list:
-    if now is None:
-        now = datetime.now()
+    now = ensure_minsk_tz(now)
     data = load_schedule()
     day_type = get_day_type(now)
     dir_data = data["directions"][direction_key]
@@ -141,8 +189,7 @@ def get_upcoming_trips(direction_key: str, now: datetime = None) -> list:
 
 def format_direction_message(direction_key: str, now: datetime = None) -> tuple:
     """Возвращает (text, inline_keyboard_rows) для выбранного направления."""
-    if now is None:
-        now = datetime.now()
+    now = ensure_minsk_tz(now)
 
     data = load_schedule()
     day_type = get_day_type(now)
@@ -174,7 +221,7 @@ def format_direction_message(direction_key: str, now: datetime = None) -> tuple:
             status = "⚫ _Только если вы уже у остановки_"
         elif leave_min <= 0:
             if diff_min >= int(walk_min * 0.75):
-                status = "🟡 *ПОРА ВЫХОДИТЬ!*"
+                status = "🟠 *ПОРА ВЫХОДИТЬ!*"
             else:
                 status = "🔴 *ПОТОРОПИТЕСЬ (быстрым шагом)!*"
         elif leave_min <= 5:
@@ -203,10 +250,8 @@ def format_direction_message(direction_key: str, now: datetime = None) -> tuple:
     return "\n".join(lines), inline_rows
 
 
-def format_target_arrival_message(target_hhmm: str, direction_key: str, now: datetime = None) -> str:
-    if now is None:
-        now = datetime.now()
-
+def _pick_target_arrival_trips(target_hhmm: str, direction_key: str, now: datetime = None) -> tuple:
+    now = ensure_minsk_tz(now)
     data = load_schedule()
     day_type = get_day_type(now)
     dir_data = data["directions"][direction_key]
@@ -232,12 +277,19 @@ def format_target_arrival_message(target_hhmm: str, direction_key: str, now: dat
             "door_min": door_min,
             "door_clock": minutes_to_hhmm(door_min),
             "leave_clock": minutes_to_hhmm(dep_min - walk_before_min),
+            "walk_min": walk_before_min,
         })
 
     fitting_door = [t for t in enriched if t["door_min"] <= target_min]
     fitting_stop = [t for t in enriched if t["arr_min"] <= target_min]
     base_list = fitting_door if fitting_door else fitting_stop
     picked = list(reversed(base_list[-2:]))
+    return picked, day_type, dir_data
+
+
+def format_target_arrival_message(target_hhmm: str, direction_key: str, now: datetime = None) -> str:
+    now = ensure_minsk_tz(now)
+    picked, day_type, dir_data = _pick_target_arrival_trips(target_hhmm, direction_key, now)
 
     dest_label = "на месте" if direction_key == "to_school" else "дома"
     header_icon = "🏠 ➔ 🏙️" if direction_key == "to_school" else "🏙️ ➔ 🏠"
@@ -254,20 +306,39 @@ def format_target_arrival_message(target_hhmm: str, direction_key: str, now: dat
 
     for idx, t in enumerate(picked):
         tag = "✅ *Вариант 1 (Вовремя)*" if idx == 0 else "🛡️ *Вариант 2 (С запасом)*"
+        arr_val = t.get("arr") or "—"
         lines.append(
             f"{tag}\n"
             f"   🚌 Автобус *{t['route']}* — сесть в *{t['dep']}*\n"
             f"   📍 {t['stop_from']}\n"
             f"   🚶 Выход из дома/места в *{t['leave_clock']}*\n"
-            f"   🏁 На остановке в *{t['arr']}* ➔ {dest_label} в *{t['door_clock']}*\n"
+            f"   🏁 На остановке в *{arr_val}* ➔ {dest_label} в *{t['door_clock']}*\n"
         )
 
     return "\n".join(lines)
 
 
+def build_target_arrival_keyboard(target_hhmm: str, direction_key: str, now: datetime = None) -> list:
+    now = ensure_minsk_tz(now)
+    picked, _, _ = _pick_target_arrival_trips(target_hhmm, direction_key, now)
+    dir_code = "c" if direction_key == "to_school" else "h"
+    rows = []
+    for t in picked:
+        hhmm = t["dep"].replace(":", "")
+        r_slug = route_to_slug(t["route"])
+        rows.append([{
+            "text": f"🔔 Напомнить: {t['route']} в {t['dep']} (выход {t['leave_clock']})",
+            "callback_data": f"rem:{dir_code}:{r_slug}:{hhmm}:{t['walk_min']}",
+        }])
+
+    other_dir = "to_home" if direction_key == "to_school" else "to_school"
+    other_label = "🏙️ ➔ 🏠 Показать Домой" if other_dir == "to_home" else "🏠 ➔ 🏙️ Показать В Город"
+    rows.append([{"text": other_label, "callback_data": f"plan:{other_dir}:{target_hhmm}"}])
+    return rows
+
+
 def format_full_day_schedule(now: datetime = None) -> str:
-    if now is None:
-        now = datetime.now()
+    now = ensure_minsk_tz(now)
     data = load_schedule()
     day_type = get_day_type(now)
 
@@ -299,8 +370,7 @@ def _load_reminders_unlocked() -> list:
 
 
 def _save_reminders_unlocked(items: list):
-    with open(REMINDERS_FILE, "w", encoding="utf-8") as f:
-        json.dump(items, f, ensure_ascii=False, indent=2)
+    _atomic_write_json(REMINDERS_FILE, items)
 
 
 def parse_reminder_code(code: str):
@@ -322,9 +392,8 @@ def parse_reminder_code(code: str):
 
 
 def create_reminder(chat_id: int, direction_key: str, route: str, dep_hhmm: str, walk_min: int, now: datetime = None) -> tuple:
-    """Создаёт напоминание (за 5 мин до выхода и в момент выхода). Возвращает (text, inline_keyboard)."""
-    if now is None:
-        now = datetime.now()
+    """Создаёт напоминание (за 5 мин до выхода и в момент выхода). Возвращает (text, inline_keyboard, cleanup_ts)."""
+    now = ensure_minsk_tz(now)
 
     h, m = map(int, dep_hhmm.split(":"))
     dep_dt = now.replace(hour=h, minute=m, second=0, microsecond=0)
@@ -443,8 +512,7 @@ def _load_json_list(path: str) -> list:
 
 
 def _save_json_list(path: str, items: list):
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(items, f, ensure_ascii=False, indent=2)
+    _atomic_write_json(path, items)
 
 
 def schedule_message_delete(chat_id: int, message_id: int, delete_at_ts: int):
@@ -559,13 +627,30 @@ def reminder_worker(token: str):
 # ======================== TELEGRAM API & LOOP ========================
 
 def tg_request(token: str, method: str, payload: dict) -> dict:
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
+    global _SSL_UNVERIFIED_FALLBACK
     url = f"https://api.telegram.org/bot{token}/{method}"
     body = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, context=ctx, timeout=35) as resp:
+
+    if not _SSL_UNVERIFIED_FALLBACK:
+        try:
+            ctx = ssl.create_default_context()
+            with urllib.request.urlopen(req, context=ctx, timeout=35) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.URLError as e:
+            if isinstance(getattr(e, "reason", None), ssl.SSLError):
+                _SSL_UNVERIFIED_FALLBACK = True
+                print("[!] Системные SSL-сертификаты не найдены, переключение на резервный режим TLS.")
+            else:
+                raise
+        except ssl.SSLError:
+            _SSL_UNVERIFIED_FALLBACK = True
+            print("[!] Ошибка проверки SSL-сертификата, переключение на резервный режим TLS.")
+
+    ctx_fallback = ssl.create_default_context()
+    ctx_fallback.check_hostname = False
+    ctx_fallback.verify_mode = ssl.CERT_NONE
+    with urllib.request.urlopen(req, context=ctx_fallback, timeout=35) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
@@ -628,7 +713,23 @@ def run_bot(token: str, web_app_url: str = ""):
     }
 
     last_direction_by_chat = {}
+    known_keyboard_chats = set()
     offset = 0
+
+    def ensure_reply_keyboard(chat_id: int):
+        """Закрепляет нижнюю клавиатуру для нового чата при входе через deep-link с сайта."""
+        if chat_id in known_keyboard_chats:
+            return
+        try:
+            tg_request(token, "sendMessage", {
+                "chat_id": chat_id,
+                "text": "⌨️ Кнопки управления закреплены внизу экрана.",
+                "reply_markup": keyboard,
+                "disable_notification": True,
+            })
+            known_keyboard_chats.add(chat_id)
+        except Exception:
+            pass
 
     def get_saved_update_date() -> str:
         try:
@@ -641,7 +742,7 @@ def run_bot(token: str, web_app_url: str = ""):
 
     while True:
         try:
-            now_dt = datetime.now()
+            now_dt = now_minsk()
             today_str = now_dt.strftime("%Y-%m-%d")
             if now_dt.hour >= 6 and last_auto_update_date != today_str and (time.time() - last_retry_ts) >= 300:
                 try:
@@ -667,14 +768,12 @@ def run_bot(token: str, web_app_url: str = ""):
 
                     if cb_data.startswith("plan:") and chat_id and msg_id:
                         _, dir_key, hhmm = cb_data.split(":", 2)
-                        other_dir = "to_home" if dir_key == "to_school" else "to_school"
-                        other_label = "🏙️ ➔ 🏠 Показать Домой" if other_dir == "to_home" else "🏠 ➔ 🏙️ Показать В Город"
                         tg_request(token, "editMessageText", {
                             "chat_id": chat_id,
                             "message_id": msg_id,
                             "text": format_target_arrival_message(hhmm, dir_key),
                             "parse_mode": "Markdown",
-                            "reply_markup": {"inline_keyboard": [[{"text": other_label, "callback_data": f"plan:{other_dir}:{hhmm}"}]]},
+                            "reply_markup": {"inline_keyboard": build_target_arrival_keyboard(hhmm, dir_key)},
                         })
                         tg_request(token, "answerCallbackQuery", {"callback_query_id": cb_id})
                     elif cb_data.startswith("rem:") and chat_id:
@@ -687,6 +786,8 @@ def run_bot(token: str, web_app_url: str = ""):
                                 parsed_rem["dep"],
                                 parsed_rem["walk_min"],
                             )
+                            if not rem_kb:
+                                known_keyboard_chats.add(chat_id)
                             sent = tg_request(token, "sendMessage", {
                                 "chat_id": chat_id,
                                 "text": rem_text,
@@ -738,7 +839,10 @@ def run_bot(token: str, web_app_url: str = ""):
                             parsed_rem["walk_min"],
                         )
                         if rem_kb:
+                            ensure_reply_keyboard(chat_id)
                             inline_markup = {"inline_keyboard": rem_kb}
+                        else:
+                            known_keyboard_chats.add(chat_id)
                         sent = tg_request(token, "sendMessage", {
                             "chat_id": chat_id,
                             "text": reply,
@@ -767,15 +871,11 @@ def run_bot(token: str, web_app_url: str = ""):
                 elif parsed_hhmm:
                     dir_key = last_direction_by_chat.get(
                         chat_id,
-                        "to_school" if datetime.now().hour < 12 else "to_home",
+                        "to_school" if now_minsk().hour < 12 else "to_home",
                     )
-                    other_dir = "to_home" if dir_key == "to_school" else "to_school"
-                    other_label = "🏙️ ➔ 🏠 Показать Домой" if other_dir == "to_home" else "🏠 ➔ 🏙️ Показать В Город"
                     reply = format_target_arrival_message(parsed_hhmm, dir_key)
                     inline_markup = {
-                        "inline_keyboard": [
-                            [{"text": other_label, "callback_data": f"plan:{other_dir}:{parsed_hhmm}"}]
-                        ]
+                        "inline_keyboard": build_target_arrival_keyboard(parsed_hhmm, dir_key)
                     }
                 elif "быть к" in text.lower():
                     reply = (
@@ -789,7 +889,7 @@ def run_bot(token: str, web_app_url: str = ""):
                     update_schedule.build_schedule()
                     reply = "✅ База расписания автобусов №150 и №170с успешно обновлена!"
                 else:
-                    default_dir = "to_school" if datetime.now().hour < 12 else "to_home"
+                    default_dir = "to_school" if now_minsk().hour < 12 else "to_home"
                     last_direction_by_chat[chat_id] = default_dir
                     welcome_text = (
                         "👋 *Привет! Я семейный помощник по автобусам №150 и №170с*\n"
@@ -805,6 +905,7 @@ def run_bot(token: str, web_app_url: str = ""):
                         "parse_mode": "Markdown",
                         "reply_markup": keyboard,
                     })
+                    known_keyboard_chats.add(chat_id)
 
                     dir_text, inline_rows = format_direction_message(default_dir)
                     tg_request(token, "sendMessage", {
@@ -814,6 +915,11 @@ def run_bot(token: str, web_app_url: str = ""):
                         "reply_markup": {"inline_keyboard": inline_rows} if inline_rows else keyboard,
                     })
                     continue
+
+                if inline_markup:
+                    ensure_reply_keyboard(chat_id)
+                else:
+                    known_keyboard_chats.add(chat_id)
 
                 tg_request(token, "sendMessage", {
                     "chat_id": chat_id,

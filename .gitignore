@@ -4,4 +4,5 @@ pending_deletes.json
 .env
 __pycache__/
 *.pyc
+*.tmp
 .DS_Store

@@ -23,6 +23,13 @@ if not defined PY_CMD (
 )
 
 :loop
+if exist ".git" (
+    where git >nul 2>nul && (
+        echo [%date% %time%] Checking GitHub for updates...
+        git checkout -- schedule_data.js schedule_data.json >nul 2>nul
+        git pull --ff-only
+    )
+)
 echo [%date% %time%] Starting Telegram bot...
 %PY_CMD% bot.py
 echo [%date% %time%] Bot exited, restarting in 5 seconds...

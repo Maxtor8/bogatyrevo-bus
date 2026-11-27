@@ -22,6 +22,7 @@ import json
 import os
 import re
 import ssl
+import subprocess
 import sys
 import threading
 import time
@@ -691,6 +692,36 @@ def setup_bot_info(token: str, web_app_url: str):
             print(f"[!] Не удалось установить кнопку Mini App: {e}")
 
 
+def check_github_code_update() -> int:
+    """
+    Проверяет наличие новых коммитов в origin/main (если бот запущен из git-репозитория).
+    Возвращает количество новых коммитов (>0 значит нужно перезапуститься для git pull).
+    """
+    if not os.path.isdir(os.path.join(BASE_DIR, ".git")):
+        return 0
+    try:
+        subprocess.run(
+            ["git", "fetch", "origin", "main"],
+            cwd=BASE_DIR,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=25,
+            check=True,
+        )
+        res = subprocess.run(
+            ["git", "rev-list", "--count", "HEAD..origin/main"],
+            cwd=BASE_DIR,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        )
+        return int((res.stdout or "0").strip())
+    except Exception as e:
+        print(f"[!] Не удалось проверить обновления на GitHub: {e}")
+        return 0
+
+
 def run_bot(token: str, web_app_url: str = ""):
     print("Telegram-бот запущен! Нажмите Ctrl+C для остановки.")
     setup_bot_info(token, web_app_url)
@@ -739,11 +770,26 @@ def run_bot(token: str, web_app_url: str = ""):
 
     last_auto_update_date = get_saved_update_date()
     last_retry_ts = 0.0
+    last_weekly_code_check_date = ""
 
     while True:
         try:
             now_dt = now_minsk()
             today_str = now_dt.strftime("%Y-%m-%d")
+
+            # Еженедельная проверка обновлений кода на GitHub: воскресенье в 03:00 по Минску
+            if now_dt.weekday() == 6 and now_dt.hour == 3 and last_weekly_code_check_date != today_str:
+                last_weekly_code_check_date = today_str
+                print(f"[{now_dt.strftime('%Y-%m-%d %H:%M')}] Еженедельная проверка обновлений бота на GitHub...")
+                new_commits = check_github_code_update()
+                if new_commits > 0:
+                    print(
+                        f"[{now_dt.strftime('%Y-%m-%d %H:%M')}] Найдено обновлений: {new_commits}. "
+                        "Перезапуск через start_bot.bat для применения..."
+                    )
+                    break
+                print(f"[{now_dt.strftime('%Y-%m-%d %H:%M')}] Обновлений кода нет.")
+
             if now_dt.hour >= 6 and last_auto_update_date != today_str and (time.time() - last_retry_ts) >= 300:
                 try:
                     print(f"[{now_dt.strftime('%Y-%m-%d %H:%M')}] Плановое обновление расписания в 06:00...")
